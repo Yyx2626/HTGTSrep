@@ -1,0 +1,12 @@
+name: HTGTSrep
+channels:
+    - bioconda
+dependencies:
+    - cutadapt
+    - fastq-multx
+    - fastq-join
+    - seqtk
+    - fastx_toolkit
+    - biopython
+    - python-weblogo
+    - matplotlib-venn
