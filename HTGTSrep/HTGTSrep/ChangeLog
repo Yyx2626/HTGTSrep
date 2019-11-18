@@ -1,0 +1,5 @@
+August 21, 2017
+*update igblast1.6 to igblast1.7
+
+August 15, 2017
+*Add --dedup_by_col option to the "run" subcommand
