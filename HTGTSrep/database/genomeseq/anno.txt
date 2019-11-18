@@ -1,0 +1,8 @@
+>gi|372098989|ref|NT_039548.8| Mus musculus strain C57BL/6J chromosome 12 genomic contig, GRCm38.p3 C57BL/6J MMCHR12_CTG1 
+>gi|372098988|ref|NT_039551.8| Mus musculus strain C57BL/6J chromosome 12 genomic contig, GRCm38.p3 C57BL/6J MMCHR12_CTG7
+>gi|465789116|ref|NW_004450261.1| Mus musculus strain C57BL/6J chromosome 12 genomic patch of type FIX, GRCm38.p3 PATCHES MG4180_PATCH
+>gi|82948593|ref|NT_114988.1| Mus musculus strain 129S1/SvImJ chromosome 12 genomic scaffold, GRCm38.p3 alternate locus group 129S1/SvImJ 129S1/SVIMJ_MMCHR12_CTG3
+>gi|372099052|ref|NT_114985.3| Mus musculus strain 129S1/SvImJ chromosome 12 genomic scaffold, GRCm38.p3 alternate locus group 129S1/SvImJ 129S1/SVIMJ_MMCHR12_CTG1
+>gi|51767500|ref|NT_096355.1| Mus musculus strain BALB/c chromosome 12 genomic contig, GRCm38.p3 alternate locus group BALB/c BALB/C_MMCHR12_CTG1
+>gi|149275206|ref|NT_166433.1| Mus musculus strain RIII chromosome 12 genomic contig, GRCm38.p3 alternate locus group RIII RIII_MMCHR12_CTG1
+>gi|149263744|ref|NT_166322.1| Mus musculus strain 129S7/SvEvBrd-Hprt-b-m2 chromosome 12 genomic contig, GRCm38.p3 alternate locus group 129S7/SvEvBrd-Hprt-b-m2 129S7/SVEVBRD-HPRT-B-M2_MMCHR12_CTG2
