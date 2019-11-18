@@ -21,16 +21,16 @@ Activate the environment with
 ### Step 3
 Download proper version of [Igblast](ftp://ftp.ncbi.nih.gov/blast/executables/igblast/release/1.5.0/) and replace programs in igblast_bin folder if your OS is not Linux-based.
 
-### Step 4
+### Note
 If necessary, install some more python and R packages needed for HTGTS-rep:
 * Python
+  * **Biopython**
+  * **itertools**
   * pandas
   * argparse
   * collections
   * multiprocessing
   * scipy
-  * itertools
-  * Biopython
   * random
   * sys
   * os
@@ -40,10 +40,10 @@ If necessary, install some more python and R packages needed for HTGTS-rep:
   * csv
   * time
 * R
-  * alakazam
+  * **alakazam**
+  * **Rcolorbrewer**
+  * **Biostrings**
   * tools
-  * Rcolorbrewer
-  * Biostrings (not available for R 3.6.1)
   * igraph
   * dplyr
   * plyr
