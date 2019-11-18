@@ -580,6 +580,12 @@ for(k in 1:2){
 dev.off()
 ```
 
+#### (Optional) Annotate IGoR bestScenarios in a human-readable way
+
+```
+time python3 scripts/yyx_annotate_bestScenarios.20181206.py prepared_for_IGoR/reference/ input_xxx_indexed_sequences.tsv output_xxx_evaluate/initial_model.txt output_xxx_evaluate/initial_marginals.txt output_xxx_output/best_scenarios_counts.csv output_xxx_output/Pgen_counts.csv False | perl -pe 's/;/\t/g' >output_xxx_output/bestScenarios_Pgen_PVDJ.tsv
+```
+
 
 
 ## Back-translate
