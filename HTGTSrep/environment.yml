@@ -9,4 +9,5 @@ dependencies:
     - fastx_toolkit
     - biopython
     - python-weblogo
-    - matplotlib-venn
+    - matplotlib
+    - pandas
