@@ -272,7 +272,7 @@ Arguments:
 Usage: Rscript Yyx_one_group_JAGS.20190820.r <output_prefix> <merged.stat.txt> [pos_range] [colname_prefix]
 ```
 
-Note: it will use the Bayesian model set in hierarchical_Bayesian_model_jags_SHM_test.20190819/Yyx_HierarPropBinom_JAGS_single.20190820.txt (BUGS language)
+Note: it will use the Bayesian model setting in hierarchical_Bayesian_model_jags_SHM_test.20190819/Yyx_HierarPropBinom_JAGS_single.20190820.txt (in BUGS language)
 
 ### hierarchical_Bayesian_model_jags_SHM_test.20190819/Yyx_two_group_compare.20190903.r
 
