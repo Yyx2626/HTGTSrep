@@ -11,7 +11,14 @@ Author: Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
 
 prepare background intrinsic non-productive .nuc.txt for each V gene in folder mut_profile/nucl_text/, with filenames \*.${Vgene}-01.NP.nuc.txt
 
-and prepare foreground clonotype .nuc.txt and .stat.txt files in folder clonotype_files/, with filenames ${cln}.\*.nuc.txt and ${cln}.\*.stat.txt
+and prepare foreground clonotype .nuc.txt (and one .stat.txt) files in folder clonotype_files/, with filenames ${cln}.\*.nuc.txt (and ${cln}.\*.stat.txt)
+
+* .stat.txt file
+  * each row for one nucleotide position in the V gene; the 1st-2nd columns should be Pos, Base
+
+* .nuc.txt file
+  * base [ACGTN-.] on each position, each column for one nucleotide position in the V gene, except the 1st column is read ID
+
 
 ### Step 1. Stratify and merge nuc.txt files (output to stat.txt)
 
@@ -155,6 +162,8 @@ done   # end for clnV
 done   # end for mutMaxProp
 ```
 
+output to $basedir/mcmc_rlt.20190911/intrinsic_${Vgene}_01.site_\*.mcmc_rlt.tsv and $basedir/mcmc_rlt.20190911/${clnV}_01.site_\*.mcmc_rlt.tsv
+
 ### Step 3. Posterior comparison
 
 Prerequisites: Install R package {HDInterval}
@@ -194,6 +203,11 @@ done
 done   # end for clnV
 ```
 
+intermediate output to $basedir/two_group_compare.20190911/${clnV}_01.final_${ss}_$ee.stat.txt
+
+final output to $basedir/two_group_compare.20190911/${clnV}_01.final.stat.txt
+
+Then, check muDiff_gt0_1_PEP column in Excel (muDiff_gt0_1_PEP = PEP(muDiff > 0.1) = 1 - P_posterior(muDiff > 0.1) ). Each row for one nucleotide position in the V gene. Those sites with PEP(muDiff > 0.1) < 0.5 are considered 'significant'.
 
 ## Usage prompt
 
