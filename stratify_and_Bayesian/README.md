@@ -9,9 +9,9 @@ Author: Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
 
 ### Step 0. Prepare .stat.txt and .nuc.txt files from HTGTSrep pipeline
 
-prepare background intrinsic non-productive .nuc.txt for each V gene in folder mut_profile/nucl_text/, with filename *.${Vgene}-01.NP.nuc.txt
+prepare background intrinsic non-productive .nuc.txt for each V gene in folder mut_profile/nucl_text/, with filenames \*.${Vgene}-01.NP.nuc.txt
 
-and prepare foreground clonotype .nuc.txt and .stat.txt files in folder clonotype_files/, with filenames ${cln}.*.nuc.txt and ${cln}.*.stat.txt
+and prepare foreground clonotype .nuc.txt and .stat.txt files in folder clonotype_files/, with filenames ${cln}.\*.nuc.txt and ${cln}.\*.stat.txt
 
 ### Step 1. Stratify and merge nuc.txt files (output to stat.txt)
 
