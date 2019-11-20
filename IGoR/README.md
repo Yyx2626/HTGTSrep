@@ -392,7 +392,7 @@ done
 
 #### Plot Pgen distribution
 
-Plot figures in R code
+Do statistical test and plot figures of violin plot and histogram in R code
 
 ```
 options(stringsAsFactors=FALSE)
