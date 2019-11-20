@@ -68,7 +68,7 @@ done
 done   # end for mutMaxProp
 ```
 
-output to $basedir/foreground_clone/${clnV}_01.all.stat.txt and $basedir/background_intrinsic/intrinsic_${Vgene}_01.all.stat.txt
+output to $basedir/foreground_clone/${clnV}\_01.all.stat.txt and $basedir/background_intrinsic/intrinsic_${Vgene}\_01.all.stat.txt
 
 then, symlink to $basedir/mcmc_rlt.20190911/
 
