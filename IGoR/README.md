@@ -22,7 +22,7 @@ Most importantly, prepare three fasta files containing the V/D/J genes/alleles:
 
 #### Prepare input sequence file(s)
 
-For example, use SEQUENCE_INPUT (58-th column) or SEQUENCE_VDJ (59-th column) in .db files of HTGTSrep pipeline
+For example, use SEQUENCE_INPUT or SEQUENCE_VDJ in .db files of HTGTSrep pipeline (supposing if it is 58-th column)
 
     cat naiveB.all.db | python3 scripts/yyx_show_or_skip_or_retrieve_columns.20190128.py show
     
