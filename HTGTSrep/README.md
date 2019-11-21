@@ -19,10 +19,10 @@ Activate the environment with
     source activate HTGTSrep
 
 ### Step 3
-Download proper version of [Igblast](ftp://ftp.ncbi.nih.gov/blast/executables/igblast/release/1.5.0/) and replace programs in igblast_bin folder if your OS is not Linux-based.
+Download proper/latest version of [Igblast](ftp://ftp.ncbi.nih.gov/blast/executables/igblast/release/), unpack and copy to folder 'external_software/' if your OS is not Linux-based.
 
 ### Note
-If necessary, install some more python and R packages needed for HTGTS-rep:
+If necessary, manually install some more python and R packages needed for HTGTS-rep:
 * Python
   * **Biopython**
   * **itertools**
@@ -49,7 +49,19 @@ If necessary, install some more python and R packages needed for HTGTS-rep:
   * plyr
 
 
+
 ## Run pipeline
+
+### Prepare metadata file
+
+Metadata file is a tabular text file, which should at least containing these columns: Library, Sequencing, Primer, MID, Adapter
+
+The sample name (in file name) is determined by Library + "\_" + Sequencing;
+for example, if Library=ABC, Sequencing=DEF, then the inferred sample name in filename is ABC\_DEF.
+
+
+### Run HTGTSrep pipeline
+
 To run the pipeline, you should always activate HTGTS-Rep environment except you have all dependent softwares installed.
 
     source activate HTGTSrep

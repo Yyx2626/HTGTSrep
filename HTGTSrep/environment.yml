@@ -11,3 +11,4 @@ dependencies:
     - python-weblogo
     - matplotlib
     - pandas
+    - scipy
