@@ -1,0 +1,44 @@
+subcmd	run
+r1	test/r1.fq.gz
+r2	test/r2.fq.gz
+input	
+metafile	test/metadata.txt
+outdir	test/out
+keepunmatch	False
+demulti_length	12
+demulti_mismatch	0
+overlap	10
+diffpercent	8
+qscore	10
+qscore_cov	98
+fastq_quality_trimmer	0
+organism	mouse
+mousestrain	
+VDJdatabase	IGH
+Vdb	/storage/researchers/adam/work/huan/test_HTGTSrep/HTGTSrep/HTGTSrep/database/database-imgt/mouse_IGHV_imgt
+Ddb	/storage/researchers/adam/work/huan/test_HTGTSrep/HTGTSrep/HTGTSrep/database/database-imgt/mouse_IGHD_imgt
+Jdb	/storage/researchers/adam/work/huan/test_HTGTSrep/HTGTSrep/HTGTSrep/database/database-imgt/mouse_IGHJ_imgt
+domain_system	imgt
+auxiliary_data	/storage/researchers/adam/work/huan/test_HTGTSrep/HTGTSrep/HTGTSrep/database/optional_file/mouse_gl.aux
+Vannotation	
+Vgapseq	/storage/researchers/adam/work/huan/test_HTGTSrep/HTGTSrep/HTGTSrep/database/annotation/mouse_IGH_GAP.fasta
+V_score	150
+V_identity	0.9
+V_coverage	0.1
+V_length	100
+J_gene	
+J_length	34
+checkProductive	False
+skipDedup	False
+skipIgBlast	False
+skipUnjoined	False
+skipDemultiplex	False
+D_upstream	False
+D_upstream_length	100
+D_upstream_stitch_length	70
+dedup_by_col	False
+nproc	2
+scriptdir	/storage/researchers/adam/work/huan/test_HTGTSrep/HTGTSrep/HTGTSrep
+sample_name	HC091_Alt231,HC092_Alt231
+sample_joinfa	test/out/HC091_Alt231/reads_fasta/HC091_Alt231_join.fa.gz,test/out/HC092_Alt231/reads_fasta/HC092_Alt231_join.fa.gz
+readtypes	['join', 'unjoinR1', 'unjoinR2']
