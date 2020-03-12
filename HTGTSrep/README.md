@@ -62,7 +62,7 @@ It should generate a folder 'test/out/', in which the output files should be sim
 
 ### Prepare metadata file
 
-Metadata file is a tabular text file, which should at least containing these columns: Library, Sequencing, Primer, MID, Adapter
+Metadata file is a tabular text file, whose format is compatible to our previous [HTGTS pipeline](https://robinmeyers.github.io/transloc_pipeline/). Some columns (Breakseq, Breaksite, Chr, Start, End) in the demo test metadata file are not used in HTGTSrep pipeline, and can be ignored. The metadata file for HTGTSrep pipeline should at least containing these columns: Library, Sequencing, Primer, MID, Adapter.
 
 The sample name (in file name) is determined by Library + "\_" + Sequencing;
 for example, if Library=ABC, Sequencing=DEF, then the inferred sample name in filename is ABC\_DEF.
