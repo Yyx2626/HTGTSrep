@@ -11,7 +11,7 @@ License: MIT license
 
 HTGTS-Rep is a pipeline for comprehensive analysis of HTGTS-Rep-seq.
 
-Author: Zhou Du, Nia Kyritsis, Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
+Author: Zhou Du, Huan Chen, Nia Kyritsis, Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
 
 
 ## [IGoR](https://github.com/Yyx2626/HTGTSrep/tree/master/IGoR)
