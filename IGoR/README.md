@@ -25,9 +25,9 @@ Most importantly, prepare three fasta files containing the V/D/J genes/alleles:
 For example, use SEQUENCE_INPUT or SEQUENCE_VDJ in .db files of HTGTSrep pipeline (supposing if it is 58-th column)
 
 ```bash
-    cat naiveB.all.db | python3 scripts/yyx_show_or_skip_or_retrieve_columns.20190128.py show
-    
-    cut -f58 naiveB.all.db | tail -n+2 | perl -ne 'BEGIN{ print "seq_index;sequence\n"; $NR=0; } print join(";", $NR++, $_); ' >naiveB_indexed_sequences.csv
+cat naiveB.all.db | python3 scripts/yyx_show_or_skip_or_retrieve_columns.20190128.py show
+
+cut -f58 naiveB.all.db | tail -n+2 | perl -ne 'BEGIN{ print "seq_index;sequence\n"; $NR=0; } print join(";", $NR++, $_); ' >naiveB_indexed_sequences.csv
 ```
 
 #### Run IGoR-align
@@ -303,7 +303,7 @@ done; date) 2>&1 | tee -a run_igor_20190913/igor_infer_iter.20190919.log
 
 #### Examine convergence of log-likelihood
 
-```
+```bash
 perl -e '
 print join("\t", "iter_", 0..5)."\n";
 for($p=0; $p<15; $p++){
