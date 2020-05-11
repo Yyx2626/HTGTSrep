@@ -24,16 +24,18 @@ Most importantly, prepare three fasta files containing the V/D/J genes/alleles:
 
 For example, use SEQUENCE_INPUT or SEQUENCE_VDJ in .db files of HTGTSrep pipeline (supposing if it is 58-th column)
 
+```bash
     cat naiveB.all.db | python3 scripts/yyx_show_or_skip_or_retrieve_columns.20190128.py show
     
     cut -f58 naiveB.all.db | tail -n+2 | perl -ne 'BEGIN{ print "seq_index;sequence\n"; $NR=0; } print join(";", $NR++, $_); ' >naiveB_indexed_sequences.csv
- 
+```
+
 #### Run IGoR-align
 
 Make a working sub-directory (e.g. run_igor_20190913), then run IGoR-align for V/D/J gene alignment separately.
 According to my practical experience of IGoR program, I set 10 threads for V alignment and only one thread for each of D and J alignment.
 
-```
+```bash
 mkdir run_igor_20190913
 mkdir run_igor_20190913/aligns
 ln -s naiveB_indexed_sequences.csv  run_igor_20190913/aligns/naiveB_indexed_sequences.csv
@@ -53,7 +55,7 @@ ln -s naiveB_indexed_sequences.csv  run_igor_20190913/aligns/naiveB_indexed_sequ
 
 My practical experience is to split the input files into small files when running IGoR-infer, due to memory limit. My naiveB_indexed_sequences.csv file contains 2984791 input sequences; therefore, I split it into 15 parts (i=0..14).
 
-```
+```bash
 head run_igor_20190913/aligns/naiveB_indexed_sequences.csv
 # idx 0.., has headline
 tail run_igor_20190913/aligns/naiveB_indexed_sequences.csv
@@ -113,7 +115,7 @@ Then modified it according to the genomicV/D/Js.fasta
 For example, I modified
 * human BCR heavy (igor/share/igor/models/human/bcr_heavy/models/model_parms.txt) for mouse IgH V-D-J recombination
 
-```
+```bash
 cat igor/share/igor/models/human/bcr_heavy/models/model_parms.txt | python3 scripts/yyx_simple_sort_model_parms.20181116.py >tmp.model_parms.txt
 
 cat tmp.model_parms.txt | perl -e '
@@ -189,7 +191,7 @@ while(<STDIN>){
 
 * human TCR alpha (igor/share/igor/models/human/tcr_alpha/models/model_parms.txt) for mouse IgL V-J recombination
 
-```
+```bash
 cat igor/share/igor/models/human/tcr_alpha/models/model_parms.txt | python3 scripts/yyx_simple_sort_model_parms.20181116.py >tmp.model_parms.txt
 
 cat tmp.model_parms.txt | perl -e '
@@ -249,7 +251,7 @@ while(<STDIN>){
 
 I run IGoR-infer, manually rotating 15 splited parts (p00..14) for 6 iterations (i0..5).
 
-```
+```bash
 ls run_igor_20190913/aligns/naiveBp*
 rm -f run_igor_20190913/aligns/naiveBp*
 
@@ -331,7 +333,7 @@ Since it got convergent fast with so many training input sequences, I just choos
 
 #### Calculate Pgen of the (training) input sequences based on final four models
 
-```
+```bash
 (date; time for part in {0..14}; do
  echo part=$part start
  date; time for modelName in p12i5 p04i5 p09i4 p00i4; do
@@ -371,7 +373,7 @@ done; date) 2>&1 | tee -a run_igor/igor_evaluate_iter.20190923.log
 
 #### Merge Pgen results into one tabular file
 
-```
+```bash
 mkdir run_igor_20190913/Pgen_merged/
 rm -f run_igor_20190913/Pgen_merged/*
 
@@ -394,7 +396,7 @@ done
 
 Do statistical test and plot figures of violin plot and histogram in R code
 
-```
+```R
 options(stringsAsFactors=FALSE)
 
 setwd("run_igor_20190913/Pgen_merged")
@@ -594,7 +596,7 @@ We back-translated CDR3 amino acid sequence to all possible nucleotide sequences
 
 ### Back-translate
 
-```
+```bash
 mkdir 20181205_backtranslate
 
 time python3 scripts/yyx_translate.20181205.py F T 20181205_From_codon_usage/Mus_musculus.standard.txt <(tail -n+2 recurrent7CDR3_indexed_sequences.csv | perl -ne 'chomp; @F=split/;/; print $F[1]."\n";') >20181205_backtranslate/recurrent7CDR3_aa_seq.20181205.tsv
@@ -608,7 +610,7 @@ done
 
 Similarly, I also manually splited input files into several small files if the number of sequences was much larger than 200,000.
 
-```
+```bash
 mkdir run_igor_4/aligns/back_20181205
 
 for i in {1..4} 6; do
@@ -627,13 +629,13 @@ done
 
 Check the position of original CDR3 sequence in back-translated files.
 
-```
+```bash
 grep -f <(tail -n+2 recurrent7CDR3_indexed_sequences.csv | cut -d';' -f2) run_igor_4/aligns/back_20181205/*_indexed_sequences.csv
 ```
 
 Manually write into a tabular file.
 
-```
+```bash
 vi run_igor_4/aligns/back_20181205/original_CDR3_idx_in_back.txt
 '
 PP1	1	110307
@@ -651,7 +653,7 @@ NP2	72	82299
 
 ### prepare indexed_sequences
 
-```
+```bash
 mkdir -p run_igor_PP1_5_NP1_2_20191013/aligns
 
 cat run_igor_4/aligns/back_20181205/original_CDR3_idx_in_back.txt | while read title part idx; do
@@ -706,7 +708,7 @@ Then, run IGoR-align and IGoR-evaluate similar to previous parts.
 
 And I rearranged IGoR Pgen into tabular file as before.
 
-```
+```bash
 mkdir run_igor_PP1_5_NP1_2_20191013/Pgen_merged.20191016
 
 time for part in {1..4} 6 {71..72} {51..58}; do
@@ -723,7 +725,7 @@ done
 
 Finally, plot histogram to show the position of Pgen of original CDR3 among the Pgen distribution of all back-translated sequences
 
-```
+```bash
 mkdir parsed_back_Pgen_merged_20191016
 
 (date; time cat run_igor_4/aligns/back_20181205/original_CDR3_idx_in_back.txt | while read title part idx; do
@@ -735,8 +737,4 @@ echo -e "$seqIdx\t$mean_log10_Pgen"
 time Rscript scripts/yyx_parse_back_Pgen_merged.scenarios_without_mismatches.20191008.r $mean_log10_Pgen $title parsed_back_Pgen_merged_20191016/back_${title}_4models.20191016 run_igor_PP1_5_NP1_2_20191013/Pgen_merged.20191016/back_${part:0:1}*_4models.tsv
 done; date) 2>&1 | tee parsed_back_Pgen_merged_20191016/recurrent7CDR3.yyx_parse_back_Pgen_merged.20191016.log
 ```
-
-
-
-
 

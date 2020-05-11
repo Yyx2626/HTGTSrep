@@ -24,7 +24,7 @@ and prepare foreground clonotype .nuc.txt (and one .stat.txt) files in folder cl
 
 traverse each clnV (clonotype_Vgene; for example, if clnV=clone12323_IGHV2, then cln=clone12323 and Vgene=IGHV2)
 
-```
+```bash
 for mutMaxProp in 0.025; do
 basedir=stratify_mutProp_${mutMaxProp/./_}.20190906
 echo $basedir
@@ -79,7 +79,7 @@ output to $basedir/foreground_clone/${clnV}\_01.all.stat.txt and $basedir/backgr
 
 then, symlink to $basedir/mcmc_rlt.20190911/
 
-```
+```bash
 for mutMaxProp in 0.025; do
 basedir=stratify_mutProp_${mutMaxProp/./_}.20190906
 echo $basedir
@@ -121,7 +121,7 @@ ls stratify_mutProp_*.20190906/mcmc_rlt.20190911/*.all.stat.txt
 
 Prerequisites: Install JAGS and R package {rjags}
 
-```
+```bash
 time for mutMaxProp in 0.025; do
 basedir=stratify_mutProp_${mutMaxProp/./_}.20190906
 date
@@ -168,7 +168,7 @@ output to $basedir/mcmc_rlt.20190911/intrinsic_${Vgene}_01.site_\*.mcmc_rlt.tsv 
 
 Prerequisites: Install R package {HDInterval}
 
-```
+```bash
 time for mutMaxProp in 0.025; do
 basedir=stratify_mutProp_${mutMaxProp/./_}.20190906
 date
