@@ -82,7 +82,7 @@ Run the pipeline using subcommand "mut" for gene mutation profiling.
 
     python HTGTSrep.py mut
 
-Run the pipeline using subcommand "clonal" for clonal clustering and phylogenetic tree construction.
+Run the pipeline using subcommand "clonal" for clonotype clustering and phylogenetic tree construction.
 
     python HTGTSrep.py clonal
 
