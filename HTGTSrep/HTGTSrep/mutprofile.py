@@ -112,9 +112,15 @@ def stat_Protein(protein_file, Vgapseq, allele, reads_db, VDJseq=''):
     stat_handle = open(stat_file, 'w')
     stat_handle.write('Pos\tMut\tTotal\tBase\tY\tProbability\n')
     readsnum = len(reads_db)
+    ### 20200918 Lawrence: changed "for i in range(1, len(refAA)+1):" to  "for i in range(0, len(refAA)):"
+    ### reverted
     for i in range(1, len(refAA)+1):
+        ### base = refAA[i-1] -> base = refAA[i]
         base = refAA[i-1]
-        vcount = reads_db.ix[:,i].value_counts().to_dict()
+        ### 20200916 Lawrence: updated .ix to .iloc
+        # print("size reads_db=",reads_db.shape,"i =", i, "i goes from 0 to", len(refAA)-1, file=sys.stderr)
+        ### 20200922 Lawrence: changed from i to i-1
+        vcount = reads_db.iloc[:,i-1].value_counts().to_dict()
         misscount = vcount.get('-', 0) + vcount.get('*', 0)
         germcount = vcount.get(base, 0)
         total = readsnum - misscount
@@ -124,9 +130,12 @@ def stat_Protein(protein_file, Vgapseq, allele, reads_db, VDJseq=''):
             probability = ';'.join(['%s:%.2f%%' % (l, float(vcount[l])/total*100) for l in vcount if l not in '-*'])
         else:
             probability = '-'
+        ### % (i, mut, total, base, y, probability) -> % (i+1, mut, total, base, y, probability) to keep stat consistent after changing how the loop indexes
+        ### reverted
         stat = '%d\t%d\t%d\t%s\t%.3f\t%s\n' % (i, mut, total, base, y, probability)
         stat_handle.write(stat)
     stat_handle.close()
+
 
 def profile_Protein(group, protein_file, protein_PDF, Vgapseq, args):
     ''' Prep protein text and PDF file
@@ -202,11 +211,24 @@ def profile_Protein(group, protein_file, protein_PDF, Vgapseq, args):
                   '--composition none --size large -n 100 --scale-width NO ' \
                   '--color-scheme chemistry -S %f' % (protein_file,
                   protein_PDF, args.ymax_protein))
-
     # Prep reads_db df for additional stat analysis
+    # this is the number proteins (row number)
     proteinLen = len(protein_df['READPROTEIN'].tolist()[0])
+    ### 09222020 from reads_db = pd.DataFrame(columns=[i for i in range(0, proteinLen)], index=range(0, len(protein_df)))
+    ### to reads_db = pd.DataFrame(columns=[i for i in range(1, proteinLen+1)], index=range(1, len(protein_df)+1))
+    '''DOES THIS NEED TO BE CHANGED????'''
     reads_db = pd.DataFrame(columns=[i for i in range(0, proteinLen)], index=range(0, len(protein_df)))
+    ###+1 after proteinLen NIA CHANGED, range og starts 1 nia changed to 0
+    ### 09182020 Lawrence changed index=range(1, proteinLen+1))) to index=range(0, proteinLen)))
+    ### proteinLen = 98 = num_col in all samples
+    ### protein_df['READPROTEIN'] = num_rows
+    ### 09222020 reverted to index=range(1, proteinLen+1)
+    ### reads_db.index.is_unique: all indices unique
     reads_db = protein_df['READPROTEIN'].apply(lambda x: pd.Series([p for p in x], index=range(1, proteinLen+1)))
+    #if proteinLen != 98:
+        #print("proteinLen != 98; proteinLen=",proteinLen, file=sys.stderr)
+        #print("protein_file =", protein_file, file=sys.stderr)
+    ### reads_db dimension = [,98]
     return reads_db
 
 def run_profile(prod_type, group, sample, Vgapseq, args):

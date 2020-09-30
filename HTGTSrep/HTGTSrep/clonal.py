@@ -14,20 +14,26 @@ def define_clones(records, args):
     '''
     if args.cluster_by_gene:
         records['J_GENE'] = records['J_ALLELE'].str.split('*').str[0]
-        grouped = records.groupby(['J_GENE', 'JUNCTION_LENGTH'])
+        ### 09242020 added 'V_ALLELE' to grouped = records.groupby(['V_ALLELE', 'J_GENE', 'JUNCTION_LENGTH'])
+        grouped = records.groupby(['V_GENE', 'J_GENE', 'JUNCTION_LENGTH'])
     else:
-        grouped = records.groupby(['J_ALLELE', 'JUNCTION_LENGTH'])
+        ### 09242020 added 'V_ALLELE' to grouped = records.groupby(['V_ALLELE', 'J_GENE', 'JUNCTION_LENGTH'])
+        grouped = records.groupby(['V_ALLELE', 'J_ALLELE', 'JUNCTION_LENGTH'])
     records['clonetmp'] = '-'
     records['CLONE'] = '-'
     for key, group in grouped:
         if len(group) == 1:
-            records.ix[group.index, 'clonetmp'] = group['SEQUENCE_ID']
+            ### 09152020 Lawrence: updated from records.ix to records.loc
+            records.loc[group.index, 'clonetmp'] = group['SEQUENCE_ID']
         else:
             clonelist = hier_clust(group, args.dist)
-            records.set_value(group.index, 'clonetmp', clonelist)
+            ### 09162020 Lawrence: updated from records.set_value(group.index, 'clonetmp', clonelist)
+            ### to records.at[group.index, 'clonetmp'] = clonelist
+            records.at[group.index, 'clonetmp'] = clonelist
     clone_num = 1
     for key, group in records.groupby('clonetmp'):
-        records.ix[group.index, 'CLONE'] = clone_num
+        ### 09152020 Lawrence: updated from records.ix to records.loc
+        records.loc[group.index, 'CLONE'] = clone_num
         clone_num += 1
     records.drop('clonetmp', inplace=True, axis=1)
     records.sort_values('CLONE', ascending=True, inplace=True)
@@ -95,6 +101,8 @@ def DNAprofile_clones_errbar(group, sample_errbar, args):
         nuc_stat = "%s/nucl_text/clone%s_%s.%s.%s.%s.stat.txt" % (
                 dirprefix, clone, allele, sample, args.muttype, args.productivetype)
         sample_files[sample] = [nuc_PDF, nuc_stat]
+        ### print to find if the correct file paths are generated. trying to solve missing stat file
+        # print("finding ", sample_files[sample],file = sys.stderr)
     nuc_PDF_errbar = "%s/nucl_profile_errbar/clone%s.%s.%s.errbar.pdf" % (
             dirprefix, clone, args.muttype, args.productivetype)
     nuc_stat_errbar = "%s/nucl_text_errbar/clone%s_%s.%s.%s.stat.errbar.txt" % (
@@ -111,6 +119,7 @@ def DNAprofile_clones_errbar(group, sample_errbar, args):
 
     if len(sample_errbar) == 1:
         nuc_PDF_sample = sample_files[sample_errbar[0]][0]
+        print("DNAprofile_clones_errbar did not output a file, because len(sample_errbar) == 1", file = sys.stderr)
         # if os.path.exists(nuc_PDF_sample):
         #     os.system('cp %s %s' % (nuc_PDF_sample, nuc_PDF_errbar))
     else:
@@ -176,6 +185,9 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
             records_tree.loc[records_tree['SEQUENCE_ID']==SEQUENCE_ID, 'SEQUENCE_IMGT'] = SEQUENCE_IMGT
 
     # Get lineage tree from collapsed records
+    ### these two statements help find keyError
+    # print("sample in treeClone =",sample,file=sys.stderr)
+    # print("have allcolumns before collapse?", len(records_tree["SEQUENCE_INPUT"]))
     records_collapse = collapse_db(records_tree, 'partial', 'F')
     records_collapse['DUPCOUNT'] = 1
     for index, row in records_collapse.iterrows():
@@ -200,7 +212,7 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
                     "SHORTCOUNT", "SAMPLECOUNT", "JUNCTION_LENGTH", "CDR3_SEQ", "SEQUENCE_IMGT",
                     "GERMLINE_IMGT_D_MASK"]
     records_Output = records_collapse[select_Output]
-    file_collapse = "%s/%s_clonal/%s.collapse.xls" % (args.outdir, sample, sample)
+    file_collapse = "%s/%s_clonal/s_clonal%s.collapse.xls" % (args.outdir, sample, sample)
     records_Output.to_csv(file_collapse, sep="\t", index=False)
 
     if not args.skipTree:
@@ -286,6 +298,9 @@ def series_analyze_onesample(records, sample, args):
     4. Summarize clones
     5. Lineage Tree construction
     """
+    ### 09162020 Lawrence: added print(...)
+    # show the current sample
+    print("current sample:", sample, file=sys.stderr)
     # Define clones and write IgBlast Db files
     records = define_clones(records, args)
     outputfile = '%s/%s_clonal/%s.db_clone.xls' % (args.outdir, sample, sample)
@@ -303,8 +318,17 @@ def series_analyze_onesample(records, sample, args):
 
     statfile = '%s/%s_clonal/%s.clone_stat.xls' % (args.outdir, sample, sample)
     clone_stat(records, statfile, 'sep', args)
-
     return records
+'''
+    ###ADD CONSENSUS/AA DETAILS HERE!##################################################
+    tempFile = '%s/%s_clonal/%s.clone_stat_temp.xls' % (args.outdir, sample, sample)
+    scriptLocation = '%s/HTGTSrep/translate_consensus_Clonal.py' % (args.scriptdir) #may need to add %s/HTGTSrep/translate_consensus_clonal
+    os.system("python3 {0} {1} > {2}".format(scriptLocation, statfile, tempFile))
+    os.system("mv {0} {1}".format(tempFile, statfile))
+    
+    ###################################################################################
+'''
+
 
 # def selection_analyze():
 #     os.system('Rscript %s/external_software/baseline/Baseline_Main_Version1.3.r' \
@@ -343,7 +367,6 @@ def clone_stat(records, statfile, sampletype, args):
         else:
             SAMPLE_DETAIL = group['SAMPLE'].values[0]
             SAMPLE_RATIO = 1
-
         V_ALLELE = group["V_ALLELE"].value_counts().keys()[0]
         D_ALLELE = group["D_ALLELE"].value_counts().keys()[0]
         J_ALLELE = group["J_ALLELE"].values[0]
@@ -375,11 +398,14 @@ def series_analyze_allsample(records, samplelist, args):
     records = define_clones(records, args)
     outputfile = '%s/allsample_clonal/allsample.mix_clone.xls' % (args.outdir)
     records.to_csv(outputfile, sep="\t", index=False)
-
+   
     # Generate mutation profile for each sample
     for key, group in records.groupby('CLONE'):
         sample_errbar = []
+        # key is each clone
+        # group is df
         for sample, subgroup in group.groupby('SAMPLE'):
+            ### args.min_profileread_sub = 10
             if len(subgroup) >= args.min_profileread_sub:
                 sample_errbar.append(sample)
                 DNAprofile_clones(subgroup, sample, args, 'mixCluster')
@@ -390,9 +416,55 @@ def series_analyze_allsample(records, samplelist, args):
             if len(sample_errbar) > 1:
                 DNAprofile_clones_errbar(group, sample_errbar, args)
 
-    # Generate stat file for shared clones
     statfile = '%s/allsample_clonal/allsample.mix_clone.stat.xls' % (args.outdir)
     clone_stat(records, statfile, 'mix', args)
+    #########CREATE MASTER TLX HERE ################
+    masterstatfile = '%s/allsample_clonal/allsample.master.mix_clone.stat.xls' % (args.outdir)
+    #tempFile = '%s/%s_clonal/%s.clone_stat_temp.xls' % (args.outdir, sample, sample)#
+    listSamples = ""
+    for sample in samplelist:
+        clonestatfile = '%s/%s_clonal/%s.clone_stat.xls' % (args.outdir, sample, sample)
+        listSamples += clonestatfile + " "
+    print("samplelist=",samplelist, file = sys.stderr)
+
+    ##create master xls
+    scriptLocation = '%s/HTGTSrep/junctionsPerLibs.py' % (args.scriptdir)
+    os.system("python3 {0} {1} {2} > {3}".format(scriptLocation, statfile, listSamples, masterstatfile)) ###junctionsperlibs
+    
+    ###create lib detail file
+    libdetailfile = '%s/allsample_clonal/allsample.lib_detail.xls' % (args.outdir)
+    libScript = '%s/HTGTSrep/libConsensus_clonal.py' % (args.scriptdir)
+    os.system("python3 {0} {1} > {2}".format(libScript, masterstatfile, libdetailfile))
+    
+    ###order information in master file
+    tempMaster = '%s/allsample_clonal/allsample.master_temp.mix_clone.stat.xls' % (args.outdir)
+    orderlibScript = '%s/HTGTSrep/orderLibDetail.py' % (args.scriptdir)
+    os.system("python3 {0} {1} > {2}".format(orderlibScript, masterstatfile, tempMaster))
+    os.system("mv {0} {1}".format(tempMaster, masterstatfile))
+    
+    ###add sample ration and sort 6/11
+    addRatioScript = '%s/HTGTSrep/add_sampleratio_sort.py' % (args.scriptdir)
+    os.system("python3 {0} {1} {2}".format(addRatioScript, statfile, listSamples))
+    #print("COMMAND: python3 "+addRatioScript+" "+statfile+" "+listSamples)
+    
+    ##Screen 6/11
+    screenScript = '%s/HTGTSrep/screen_master_stat.py' % (args.scriptdir)
+    screenoutputfile = '%s/allsample_clonal/%s.master.mix_clone.stat_screen.xls' % (args.outdir, args.outdir)
+    os.system("python3 {0} {1} > {2}".format(screenScript, masterstatfile, screenoutputfile))
+    
+    
+    ###clean up files
+    os.system("mv {0} {1}".format('%s/allsample_clonal/allsample.master.mix_clone.stat.xls' % (args.outdir), '%s/allsample_clonal/%s.master.mix_clone.stat.xls' % (args.outdir, args.outdir)))
+    os.system("mv {0} {1}".format('%s/allsample_clonal/allsample.lib_detail.xls' % (args.outdir), '%s/allsample_clonal/%s.lib_detail.xls' % (args.outdir, args.outdir)))
+    os.system("mv {0} {1}".format('%s/allsample_clonal/allsample.mix_clone.stat.xls' % (args.outdir), '%s/allsample_clonal/%s.mix_clone.stat.xls' % (args.outdir, args.outdir)))
+    os.system("mv {0} {1}".format('%s/allsample_clonal/allsample.mix_clone.xls' % (args.outdir), '%s/allsample_clonal/%s.mix_clone.xls' % (args.outdir, args.outdir)))
+    os.system("mv {0} {1}".format('%s/allsample_clonal/allsample.sep_clone.xls' % (args.outdir), '%s/allsample_clonal/%s.sep_clone.xls' % (args.outdir, args.outdir)))
+
+
+    # Generate stat file for shared clones
+    ### TEHSE HAbr BEEN GENERATED ABOVE  SO THESE TWO LINES ARE COMMENTED OUT
+    # statfile = '%s/allsample_clonal/allsample.mix_clone.stat.xls' % (args.outdir)
+    # clone_stat(records, statfile, 'mix', args)
 
     # Generate lineage Tree
     if not args.skipTree:
@@ -402,14 +474,13 @@ def clonal_main(args):
     logging.info('Loading reads database')
     # Collapse reads
     sample_path = args.__dict__['sample_path']
-
     pool = multiprocessing.Pool(processes = len(sample_path))
     results = []
     for sample in sample_path:
         path = sample_path[sample]
         dbpath = path + '/%s.db.xls' % sample
         records = pd.read_csv(dbpath, sep="\t")
-
+        print("initial records file", dbpath, file=sys.stderr)
         # Filter records using V coverage, CDR3 length, whether 'N' in CDR3
         records = records.loc[records['V_COVERAGE'] > args.min_Vcov, ]
         records["JUNCTION_LENGTH"] = records.CDR3_SEQ.map(len)
@@ -431,12 +502,16 @@ def clonal_main(args):
         elif args.productivetype == 'NP':
             records = records.loc[records['PRODUCTIVE'] == 'F', ]
         # Run series analysis with multiprocessing   result = series_analyze_onesample(records, sample, args)
+     #   print("mid loop: sample is", sample, file=sys.stderr)
         result = pool.apply_async(series_analyze_onesample, (records, sample, args,))
+     #   print("result.get()",result.get(),file=sys.stderr)
         results.append(result)
     pool.close()
     pool.join()
 
     # Analysis in all samples
+    #print("frame: results=",results, file = sys.stderr)
+    ### frame: results= [<multiprocessing.pool.ApplyResult object at 0x7fe95d9d13d0>, ....,]
     frames = [result.get() for result in results]
     records_allsample = pd.concat(frames, ignore_index=True)
     series_analyze_allsample(records_allsample, sample_path.keys(), args)

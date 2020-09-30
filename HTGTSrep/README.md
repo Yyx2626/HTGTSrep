@@ -1,7 +1,7 @@
 # HTGTS-Rep
 HTGTS-Rep is a pipeline for comprehensive analysis of HTGTS-Rep-seq.
 
-Author: Zhou Du, Huan Chen, Nia Kyritsis, Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
+Author: Zhou Du, Huan Chen, Nia Kyritsis, Jianqiao Hu, Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
 
 ## Installation
 

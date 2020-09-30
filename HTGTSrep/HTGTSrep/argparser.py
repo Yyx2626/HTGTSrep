@@ -573,10 +573,8 @@ def parentParser(subname):
                             help = "Output directory")
         # parser.add_argument("--outfile", type = str, required = True,
         #                     help = "Output name prefix")
-
         parser.add_argument("--genecdr", type = str,
                             help = "CDR1, 2, 3 position file" )
-
         parser.add_argument("--min_Vcov", type = float, default = 0.5,
                             help = "Minimum coverage of V gene by the read (0.5)" )
         parser.add_argument("--muttype", choices = ['MutOnly', 'noMut', 'noMut_filter'],
@@ -608,7 +606,7 @@ def parentParser(subname):
         parser.add_argument("--skipCDR3withN", action='store_true',
                             default=False, help = "Skip reads with 'N' in their CDR3 sequences.")
         parser.add_argument("--cluster_by_gene", action='store_true',
-                            default=False, help = "Use gene instead of allele in clonal clustering" )
+                            default=False, help = "Use (V/J)_gene instead of (V/J)_allele in clonal clustering" )
 
         # parser.add_argument("--norm", type = str,
         #                     choices = ['len', 'mut', 'none'], default = 'len',

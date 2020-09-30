@@ -16,14 +16,14 @@ def writeOutputSeq(col_ID, col_seq, output_file, db):
     Generate output fasta file using db dataframe
     """
     output_handle = open(output_file, 'w')
-    for key,row in db.iterrows():
+    for key, row in db.iterrows():
         output_handle.write('>%s\n%s\n' % (row[col_ID], row[col_seq]))
     protein_handle.close()
 
 def collapse_fasta(prefix):
     print(prefix)
     # parse joined reads
-    seq_dict_joined = getInputSeq(prefix+'_join.raw.fa')
+    seq_dict_joined = getInputSeq(prefix + '_join.raw.fa')
     seq_id_dict = {}
     for id in seq_dict_joined:
         seq = seq_dict_joined[id]
@@ -31,28 +31,29 @@ def collapse_fasta(prefix):
             seq_id_dict[seq] = [id]
         else:
             seq_id_dict[seq].append(id)
-    fjoined = open((prefix+'_join.fa'), 'w')
+    fjoined = open((prefix + '_join.fa'), 'w')
     for seq in seq_id_dict:
         fjoined.write('>%s\n%s\n' % ('_'.join(seq_id_dict[seq]), seq))
     fjoined.close()
 
     # parse unjoined
-    seq_dict_R1 = getInputSeq(prefix+'_unjoinR1.raw.fa')
-    seq_dict_R2 = getInputSeq(prefix+'_unjoinR2.raw.fa')
-    seq_id_dict_R1R2 = {}   # concated seq: [seq IDs]
+    seq_dict_R1 = getInputSeq(prefix + '_unjoinR1.raw.fa')
+    seq_dict_R2 = getInputSeq(prefix + '_unjoinR2.raw.fa')
+    seq_id_dict_R1R2 = {}  # concated seq: [seq IDs]
     for id in seq_dict_R1:
         concat_seq = seq_dict_R1[id] + seq_dict_R2[id]
         if concat_seq not in seq_id_dict_R1R2:
             seq_id_dict_R1R2[concat_seq] = [id]
         else:
             seq_id_dict_R1R2[concat_seq].append(id)
-    fR1 = open(prefix+'_unjoinR1.fa', 'w')
-    fR2 = open(prefix+'_unjoinR2.fa', 'w')
+    fR1 = open(prefix + '_unjoinR1.fa', 'w')
+    fR2 = open(prefix + '_unjoinR2.fa', 'w')
     for seq in seq_id_dict_R1R2:
         fR1.write('>%s\n%s\n' % ('_'.join(seq_id_dict_R1R2[seq]), seq_dict_R1[seq_id_dict_R1R2[seq][0]]))
         fR2.write('>%s\n%s\n' % ('_'.join(seq_id_dict_R1R2[seq]), seq_dict_R2[seq_id_dict_R1R2[seq][0]]))
     fR1.close()
     fR2.close()
+
 
 def getInputSeq(seq_file):
     """
@@ -62,7 +63,9 @@ def getInputSeq(seq_file):
     Returns:
     a dictionary of {ID:Seq}
     """
+    ### add print message to warn for empty dict
     if not os.path.exists(seq_file):
+        print("%s FAILED TO LOAD. EMPTY DICT IS RETURNED. THIS MAY INFLUENCE YOUR RESULTS" % seq_file, file=sys.stderr)
         return {}
 
     if seq_file.endswith('.gz'):
@@ -76,7 +79,16 @@ def getInputSeq(seq_file):
     # Create a seq_dict ID translation using IDs truncate up to space or 50 chars
     seqs = {}
     for seq in seq_dict.values():
-        seqs.update({seq.description:str(seq.seq).upper()})
+        seqs.update({seq.description: str(seq.seq).upper()})
+
+    ### .fa files may have a header preceeding each gene. This chunk is added to make sure the header is removed
+    ### can't change the brackets, otherwise keyerror
+    if ".fa" in seq_file_unzip:
+        keys = list(seqs.keys())
+        # obtain a list of keys stripped of the header
+        for i in range(len(keys)):
+            keys[i] = keys[i].replace("lcl|", "", 1)
+        seqs = dict(zip(keys, list(seqs.values())))
 
     if seq_file.endswith('.gz'):
         os.system('gzip %s' % seq_file_unzip)
@@ -99,7 +111,7 @@ def getCSV(csvfile):
     tmplist = []
     for chunk in pd.read_csv(csvfile, sep='\t', chunksize=20000):
         tmplist.append(chunk)
-    m = pd.concat(tmplist, axis= 0)
+    m = pd.concat(tmplist, axis=0)
     del tmplist
     return m
 
@@ -167,6 +179,7 @@ def fasta_count(fname):
     fin.close()
     return i
 
+
 def reads_stat(args):
     for sample in sample_info:
         eachdir = '%s/%s' % (args.outdir, sample)
@@ -206,7 +219,7 @@ def mutate_seq(orig_string, mutation_rate=0.005):
     for base in orig_string:
         n += 1
         if random.random() < mutation_rate and base in bases:
-            new_base = bases[bases.index(base) - random.randint(1, 3)] # negatives are OK
+            new_base = bases[bases.index(base) - random.randint(1, 3)]  # negatives are OK
             result.append(new_base)
             mutations.append('%s%d%s' % (base, n, new_base))
         else:
@@ -245,8 +258,8 @@ def parsefa_long(file, length):
     fout.close()
 
 def smooth(self, nucMutnum, nucCovnum, genetotalseq, statfilelist):
-    #print(nucMutnum['A'], nucMutnum['G'], nucMutnum['C'], nucMutnum['T'])
-    #print(nucCovnum['A'], nucCovnum['G'], nucCovnum['C'], nucCovnum['T'])
+    # print(nucMutnum['A'], nucMutnum['G'], nucMutnum['C'], nucMutnum['T'])
+    # print(nucCovnum['A'], nucCovnum['G'], nucCovnum['C'], nucCovnum['T'])
     nucMucratio = {}
     smoothpower = self.args.additivesmooth
     for nuc in 'AGCT':
@@ -271,15 +284,17 @@ def smooth(self, nucMutnum, nucCovnum, genetotalseq, statfilelist):
                 fnew.write('%s\n' % '\t'.join(l))
         fnew.close()
         pdffile = statnew.replace('nucfile', 'profiles').replace('txt', 'pdf')
-        loggingRun('Rscript scripts/SHMPlot2.R %s %s plotrows=1 figureheight=2 showsequence=FALSE ymax=0.2 cdr1_start=%d cdr1_end=%d cdr2_start=%d cdr2_end=%d cdr3_start=%d cdr3_end=%d' % \
-                (statnew, pdffile, self.V_CDR[gene]['CDR1_start'], self.V_CDR[gene]['CDR1_end'], \
-                self.V_CDR[gene]['CDR2_start'], self.V_CDR[gene]['CDR2_end'], \
-                self.V_CDR[gene]['CDR3_start'], self.V_CDR[gene]['CDR3_end']))
+        ### 09152020: changed showsequence from false to ture
+        loggingRun(
+            'Rscript scripts/SHMPlot2.R %s %s plotrows=1 figureheight=2 showsequence=TRUE ymax=0.2 cdr1_start=%d cdr1_end=%d cdr2_start=%d cdr2_end=%d cdr3_start=%d cdr3_end=%d' % \
+            (statnew, pdffile, self.V_CDR[gene]['CDR1_start'], self.V_CDR[gene]['CDR1_end'], \
+             self.V_CDR[gene]['CDR2_start'], self.V_CDR[gene]['CDR2_end'], \
+             self.V_CDR[gene]['CDR3_start'], self.V_CDR[gene]['CDR3_end']))
 
 ######### this section is for tree construction & file parsing
 
 def mergeSampleCount(shortlist):
-    samplelist = [ s.split(':')[0] for s in shortlist[0].split('|') ]
+    samplelist = [s.split(':')[0] for s in shortlist[0].split('|')]
     sample_count = {}
     for s in samplelist:
         sample_count[s] = 0
@@ -306,7 +321,7 @@ def treeCollapseParse(fin, fout):
         for si in group['SEQUENCE_IMGT']:
             s = []
             for n in range(0, len(si)):
-                if si[n] in ['N', '.'] and germseq[n] != 'N' :
+                if si[n] in ['N', '.'] and germseq[n] != 'N':
                     s.append(germseq[n])
                 else:
                     s.append(si[n])
@@ -315,17 +330,18 @@ def treeCollapseParse(fin, fout):
         grouped2 = group.groupby("FULLSEQ")
         for subkey, subgroup in grouped2:
             subgroup = pd.DataFrame(subgroup)
-            subgroup["trimlen"] = [ len(s.replace('.', '').replace('N', '')) for s in subgroup['SEQUENCE_IMGT'] ]
+            subgroup["trimlen"] = [len(s.replace('.', '').replace('N', '')) for s in subgroup['SEQUENCE_IMGT']]
             subgroup = subgroup.sort_values("trimlen", ascending=False)
             idlist.append(list(subgroup['SEQUENCE_ID'])[0])
             fullseqlist.append(list(subgroup['FULLSEQ'])[0])
             readlist.append('|'.join(list(subgroup['SEQUENCE_ID'])))
             sclist.append(mergeSampleCount(list(subgroup['SHORTCOUNT'])))
-    treeCollapse = pd.DataFrame(db.loc[ db['SEQUENCE_ID'].isin(idlist), ])
+    treeCollapse = pd.DataFrame(db.loc[db['SEQUENCE_ID'].isin(idlist),])
     treeCollapse["SHORTCOUNT"] = sclist
-    #treeCollapse["SEQUENCE_IMGT"] = fullseqlist
-    #treeCollapse["READGROUP"] = readlist
-    treeCollapse.to_csv(fout , sep="\t", index=False)
+    # treeCollapse["SEQUENCE_IMGT"] = fullseqlist
+    # treeCollapse["READGROUP"] = readlist
+    treeCollapse.to_csv(fout, sep="\t", index=False)
+
 
 def files_process(args, worktype):
     # IgBlast clean up
@@ -333,7 +349,7 @@ def files_process(args, worktype):
         for sample in args.metadict:
             eachdir = '%s/%s' % (args.outdir, sample)
             dirlist = ['reads_fasta', 'reads_fastq', 'igblast_raw',
-                        'igblast_db'] #, 'bowtie_sam']
+                       'igblast_db']  # , 'bowtie_sam']
             for d in dirlist:
                 if not os.path.exists('%s/%s' % (eachdir, d)):
                     os.system('mkdir %s/%s' % (eachdir, d))
@@ -362,8 +378,8 @@ def getNmers(sequences, n):
     # Add Ns so first nucleotide is center of first n-mer
     sequences_n = ['N' * ((n - 1) // 2) + seq + 'N' * ((n - 1) // 2) for seq in sequences]
     nmers = {}
-    for seq,seqn in zip(sequences,sequences_n):
-        nmers[seq] = [seqn[i:i+n] for i in range(len(seqn)-n+1)]
+    for seq, seqn in zip(sequences, sequences_n):
+        nmers[seq] = [seqn[i:i + n] for i in range(len(seqn) - n + 1)]
     # nmers = {(seq, [seqn[i:i+n] for i in range(len(seqn)-n+1)]) for seq,seqn in izip(sequences,sequences_n)}
 
     return nmers
@@ -386,9 +402,9 @@ def scoreDNA(a, b, mask_score=None, gap_score=None):
       int : Score for the character pair
     """
     # Define ambiguous character translations
-    IUPAC_trans = {'AGWSKMBDHV':'R', 'CTSWKMBDHV':'Y', 'CGKMBDHV':'S', 'ATKMBDHV':'W', 'GTBDHV':'K',
-                   'ACBDHV':'M', 'CGTDHV':'B', 'AGTHV':'D', 'ACTV':'H', 'ACG':'V', 'ABCDGHKMRSTVWY':'N',
-                   '-.':'.'}
+    IUPAC_trans = {'AGWSKMBDHV': 'R', 'CTSWKMBDHV': 'Y', 'CGKMBDHV': 'S', 'ATKMBDHV': 'W', 'GTBDHV': 'K',
+                   'ACBDHV': 'M', 'CGTDHV': 'B', 'AGTHV': 'D', 'ACTV': 'H', 'ACG': 'V', 'ABCDGHKMRSTVWY': 'N',
+                   '-.': '.'}
     # Create list of tuples of synonymous character pairs
     IUPAC_matches = [p for k, v in IUPAC_trans.items() for p in list(product(k, v))]
 
@@ -441,11 +457,11 @@ def getDNADistMatrix(mat=None, mask_dist=0, gap_dist=0):
 
     # Fill in provided distances from input matrix
     if mat is not None:
-        for i,j in product(mat.index, mat.columns):
+        for i, j in product(mat.index, mat.columns):
             dist_mat.at[i, j] = mat.at[i, j]
     # If no input matrix, create IUPAC-defined Hamming distance
     else:
-        for i,j in product(dist_mat.index, dist_mat.columns):
+        for i, j in product(dist_mat.index, dist_mat.columns):
             dist_mat.at[i, j] = 1 - scoreDNA(i, j,
                                              mask_score=(1 - mask_dist, 1 - mask_dist),
                                              gap_score=(1 - gap_dist, 1 - gap_dist))
@@ -469,13 +485,13 @@ def calcDistances(sequences, n, dist_mat, norm, sym):
       ndarray : numpy matrix of pairwise distances between input sequences
     """
     # Initialize output distance matrix
-    dists = np.zeros((len(sequences),len(sequences)))
+    dists = np.zeros((len(sequences), len(sequences)))
     # Generate dictionary of n-mers from input sequences
     nmers = getNmers(sequences, n)
     # Iterate over combinations of input sequences
-    for j,k in combinations(list(range(len(sequences))), 2):
+    for j, k in combinations(list(range(len(sequences))), 2):
         # Only consider characters and n-mers with mutations
-        mutated = [i for i,(c1,c2) in enumerate(zip(sequences[j],sequences[k])) if c1 != c2]
+        mutated = [i for i, (c1, c2) in enumerate(zip(sequences[j], sequences[k])) if c1 != c2]
         seq1 = [sequences[j][i] for i in mutated]
         seq2 = [sequences[k][i] for i in mutated]
         nmer1 = [nmers[sequences[j]][i] for i in mutated]
@@ -500,9 +516,9 @@ def calcDistances(sequences, n, dist_mat, norm, sym):
         # Calculate distances
         try:
             dists[j, k] = dists[k, j] = \
-                    sum([sym_fun([dist_mat.at[c1, n2], dist_mat.at[c2, n1]]) \
-                         for c1, c2, n1, n2 in zip(seq1, seq2, nmer1, nmer2)]) / \
-                    (norm_by)
+                sum([sym_fun([dist_mat.at[c1, n2], dist_mat.at[c2, n1]]) \
+                     for c1, c2, n1, n2 in zip(seq1, seq2, nmer1, nmer2)]) / \
+                (norm_by)
         except (KeyError):
             raise KeyError('Unrecognized character in sequence.')
     return dists
@@ -538,7 +554,7 @@ def hier_clust(group, distance):
     IDs = group['SEQUENCE_ID'].tolist()
     seqs_uniq = list(set(seqs))
     seq_map = {}
-    for key,row in group.iterrows():
+    for key, row in group.iterrows():
         seq = row['CDR3_MASK']
         ID = row['SEQUENCE_ID']
         seq_map.setdefault(seq, []).append(ID)
@@ -562,14 +578,29 @@ def hier_clust(group, distance):
         clone_tmp = ['%s_%d' % (IDs[0], clone_dict[seq_id]) for seq_id in IDs]
     return clone_tmp
 
+
 def getGermdict(args):
     ''' Read VDJ IgBlast database and obtain un-gapped germline sequences
+    	2020/09 Lawrence: Add in a check condition to ensure databases are read properly
     '''
     germ_dict = {}
-    germ_dict.update(getInputSeq(args.params_dict['Vdb']))
-    germ_dict.update(getInputSeq(args.params_dict['Ddb']))
-    germ_dict.update(getInputSeq(args.params_dict['Jdb']))
+    Vdb = getInputSeq(args.params_dict['Vdb'])
+    Ddb = getInputSeq(args.params_dict['Ddb'])
+    Jdb = getInputSeq(args.params_dict['Jdb'])
+    if not bool(Vdb):
+        print('FAILED TO LOAD %s' % args.params_dict['Vdb'], file = sys.stderr)
+    else:
+        germ_dict.update(Vdb)
+    if not bool(Ddb):
+        print('FAILED TO LOAD %s' % args.params_dict['Ddb'], file = sys.stderr)
+    else:
+        germ_dict.update(Ddb)
+    if not bool(Jdb):
+        print('FAILED TO LOAD %s' % args.params_dict['Jdb'], file = sys.stderr)
+    else:
+        germ_dict.update(Jdb)
     return germ_dict
+
 
 def collapse_db(records, collapse_type, N_Diff):
     '''
@@ -586,19 +617,21 @@ def collapse_db(records, collapse_type, N_Diff):
             'F' consider N as not difference
     Output:
     '''
+
     def _writeOutputSeq(filter_check, col_ID, col_seq, output_file, db):
         """
         Generate output fasta file using db dataframe
         """
         output_handle = open(output_file, 'w')
-        for key,row in db.iterrows():
+        for key, row in db.iterrows():
             output_handle.write('>%s\n%s\n' % (row[col_ID], row[col_seq]))
         output_handle.close()
 
     def _collapse_identical_NasDiff(records):
         def __parse_group(group):
             index_dupreads = ','.join(group['SEQUENCE_ID'])
-            top_series = group.ix[group.index[0]]
+            ### 20200916 Lawrence: updated .ix to .loc
+            top_series = group.loc[group.index[0]]
             top_series['DUPREAD'] = index_dupreads
             return top_series
 
@@ -647,16 +680,17 @@ def collapse_db(records, collapse_type, N_Diff):
             Need a new method to speed up this
         '''
         records_collect = pd.DataFrame(columns=list(records))
-        records_collect.loc[0,] = records.ix[records.index[0]]
-        for key,row in records.iterrows():
+        ### 20200916 Lawrence: updated .ix to .loc
+        records_collect.loc[0,] = records.loc[records.index[0]]
+        for key, row in records.iterrows():
             if key != records.index[0]:
                 inputseq = row['SEQUENCE_INPUT']
                 j = pd.Series(records_collect['SEQUENCE_INPUT']).str.contains(inputseq)
-                if len(j[j==True]) >= 1:
-                    i = j[j==True].index[0]
+                if len(j[j == True]) >= 1:
+                    i = j[j == True].index[0]
                     records_collect.loc[i, 'DUPREAD'] += ',%s' % row['DUPREAD']
-                elif len(j[j==True]) == 0:
-                    records_collect.loc[len(records_collect)+1,] = row
+                elif len(j[j == True]) == 0:
+                    records_collect.loc[len(records_collect) + 1,] = row
         return records_collect
 
     def _parse_SAM(read_readlen, sam_file, collapse_type):
@@ -676,13 +710,13 @@ def collapse_db(records, collapse_type, N_Diff):
         '''
         records_new = pd.DataFrame(columns=list(records))
         grouplist = ['V_ALLELE', 'D_ALLELE', 'J_ALLELE', 'STOP', 'IN_FRAME', \
-                    'V_END', 'V_D_JUNCTION', 'D_REGION', 'D_J_JUNCTION', \
-                    'J_START', 'V_J_JUNCTION']
+                     'V_END', 'V_D_JUNCTION', 'D_REGION', 'D_J_JUNCTION', \
+                     'J_START', 'V_J_JUNCTION']
         for key, group in records.groupby(grouplist):
             dup = ','.join(group['DUPREAD'].values.tolist())
             groupcontent = group.iloc[0]
             groupcontent['DUPREAD'] = dup
-            records_new.loc[len(records_new)+1,] = groupcontent
+            records_new.loc[len(records_new) + 1,] = groupcontent
         return records_new
 
     def _collapse_NasNoDiff(records, collapse_type):
@@ -703,7 +737,7 @@ def collapse_db(records, collapse_type, N_Diff):
         sam_file = '%s.sam' % randname
         os.system('bowtie2-build %s %s -q' % (ref_file, ref_file))
         os.system('bowtie2 -x ./%s -f -U %s --local -S %s --no-head  --np 0 --mp 1000 --rdg 1000,1000 --rfg 1000,1000' % \
-        (ref_file, input_file, sam_file))
+                  (ref_file, input_file, sam_file))
 
         read_readlen = records.set_index('SEQUENCE_ID').to_dict()['INPUT_LEN']
         inputR_refR = _parse_SAM(read_readlen, sam_file, collapse_type)
@@ -712,8 +746,8 @@ def collapse_db(records, collapse_type, N_Diff):
         records_waitToCollapse = records[records.SEQUENCE_ID.isin(inputR_refR.keys())]
         for inputR in inputR_refR:
             refR = inputR_refR[inputR]
-            dup = records_waitToCollapse.loc[records_waitToCollapse['SEQUENCE_ID']==inputR, 'DUPREAD'].values[0]
-            records_collapsed.loc[records_collapsed['SEQUENCE_ID']==refR, 'DUPREAD'] += ',%s' % dup
+            dup = records_waitToCollapse.loc[records_waitToCollapse['SEQUENCE_ID'] == inputR, 'DUPREAD'].values[0]
+            records_collapsed.loc[records_collapsed['SEQUENCE_ID'] == refR, 'DUPREAD'] += ',%s' % dup
         os.system('rm -rf %s %s %s %s*bt2' % (ref_file, input_file, sam_file, ref_file))
         return records_collapsed
 
@@ -742,6 +776,7 @@ def collapse_db(records, collapse_type, N_Diff):
 def profile_DNAmut(group, nuc_stat, nuc_PDF, nuc_profile, args):
     ''' Prep DNA mutation profile, text and PDF file
     '''
+    
     def _parse_V_ALLELE_NUC(row):
         return pd.Series([row["SEQUENCE_ID"]] + [s for s in row['V_ALLELE_NUC']])
 
@@ -750,12 +785,12 @@ def profile_DNAmut(group, nuc_stat, nuc_PDF, nuc_profile, args):
     allele_seq = germ_dict[allele]
     allele_len = len(allele_seq)
     colnames = ['ID'] + [l for l in allele_seq]
-    allele_mut = pd.DataFrame(columns=colnames, index=range(0,len(group)))
+    allele_mut = pd.DataFrame(columns=colnames, index=range(0, len(group)))
     allele_mut = group.apply(_parse_V_ALLELE_NUC, axis=1)
 
     statnames = ['Pos', 'Mut', 'Total', 'Base', 'Y', 'A', 'T', 'C', 'G']
-    allele_stat = pd.DataFrame(columns=statnames, index=range(1, allele_len+1))
-    allele_stat['Pos'] = range(1, allele_len+1)
+    allele_stat = pd.DataFrame(columns=statnames, index=range(1, allele_len + 1))
+    allele_stat['Pos'] = range(1, allele_len + 1)
     allele_stat['Base'] = [l for l in allele_seq]
     allele_stat[['Mut', 'Total', 'Y', 'A', 'T', 'C', 'G']] = 0
     for i in range(1, allele_len + 1):
@@ -772,7 +807,7 @@ def profile_DNAmut(group, nuc_stat, nuc_PDF, nuc_profile, args):
         countTotal = countMut + counts.get('.', 0)
         allele_stat.loc[i, 'Mut'] = countMut
         allele_stat.loc[i, 'Total'] = countTotal
-        allele_stat.loc[i, 'Y'] = float(countMut/countTotal) if countTotal > 0 else 0
+        allele_stat.loc[i, 'Y'] = float(countMut / countTotal) if countTotal > 0 else 0
         allele_stat.loc[i, 'A'] = countA
         allele_stat.loc[i, 'T'] = countT
         allele_stat.loc[i, 'C'] = countC
@@ -786,7 +821,7 @@ def profile_DNAmut(group, nuc_stat, nuc_PDF, nuc_profile, args):
         cdr = args.__dict__['V_CDR'][allele]
         cdrstring = 'cdr1_start=%s cdr1_end=%s cdr2_start=%s cdr2_end=%s ' \
                     'cdr3_start=%s cdr3_end=%s' % (cdr[0], cdr[1], cdr[2],
-                    cdr[3], cdr[4], cdr[5])
+                                                   cdr[3], cdr[4], cdr[5])
     else:
         cdrstring = ''
 
@@ -794,9 +829,14 @@ def profile_DNAmut(group, nuc_stat, nuc_PDF, nuc_profile, args):
     if len(group) >= args.min_profileread:
         sample = group["SAMPLE"].unique()[0]
         anno = '_'.join([sample, allele])
-        os.system('Rscript %s/HTGTSrep/R/SHMPlot2.R %s %s plotrows=1 figureheight=2 '
-                  'showsequence=FALSE ymax=%f %s annotation=%s ' % (args.scriptdir, nuc_stat,
-                  nuc_PDF, args.ymax_DNA, cdrstring, anno))
+    ### 20200915 Lawrence: changed showsequence from false to true
+    ### 20200916 Lawrence: changed frpm 'Rscript %s/HTGTSrep/R/SHMPlot2.R %s %s plotrows=1 figureheight=2 showsequence=TRUE ymax=%f %s annotation=%s '
+    ### to 'Rscript %s/HTGTSrep/R/SHMPlot2.R \"%s\" \"%s\" plotrows=1 figureheight=2 showsequence=TRUE ymax=%f %s annotation=\"%s\" '
+        ### this allows special characters to be in V_allel names
+        os.system('Rscript %s/HTGTSrep/R/SHMPlot2.R \"%s\" \"%s\" plotrows=1 figureheight=2 '
+                  'showsequence=TRUE ymax=%f %s annotation=\"%s\" ' % (args.scriptdir, nuc_stat,
+                                                                    nuc_PDF, args.ymax_DNA, cdrstring, anno))
+
 
 def getInferSeq(treefile, group):
     ''' Read tree file and get inferred 1 sequence,
@@ -815,15 +855,15 @@ def getInferSeq(treefile, group):
 
     germline_imgt_seq = group.iloc[0]['GERMLINE_IMGT_D_MASK']
     seq_V = germline_imgt_seq[:Vpos]
-    seq_Junc = inferseq[Vpos:Vpos+len(cdr3)]
+    seq_Junc = inferseq[Vpos:Vpos + len(cdr3)]
     if len(germline_imgt_seq) >= len(inferseq):
-        seq_J = germline_imgt_seq[Vpos+len(cdr3) : len(inferseq)]
+        seq_J = germline_imgt_seq[Vpos + len(cdr3): len(inferseq)]
     else:
-        seq_J = inferseq[Vpos+len(cdr3) : len(inferseq)]
+        seq_J = inferseq[Vpos + len(cdr3): len(inferseq)]
 
     # Use V and J parts from germline as reference to avoid mismatch at these regions in mut profiling
     newinfer = (seq_V + seq_Junc + seq_J).replace('.', 'N')
-    #print(group['CLONE'].tolist()[0], inferseq, newinfer)
+    # print(group['CLONE'].tolist()[0], inferseq, newinfer)
     return newinfer
 
 def profile_DNAmut_clonal(inferseq, group, nuc_stat, nuc_PDF, nuc_profile, args):
@@ -849,21 +889,25 @@ def profile_DNAmut_clonal(inferseq, group, nuc_stat, nuc_PDF, nuc_profile, args)
                 if l == '.': vals.append('-')
                 if l == '-': vals.append('N')
                 if l in 'ATCGN':
-                    if l == inferseq[i]: vals.append('.')
-                    else: vals.append(l)
-        allele_mut.loc[len(allele_mut)+1] = vals
+                    if l == inferseq[i]:
+                        vals.append('.')
+                    else:
+                        vals.append(l)
+        allele_mut.loc[len(allele_mut) + 1] = vals
 
     statnames = ['Pos', 'Mut', 'Total', 'Base', 'Y', 'A', 'T', 'C', 'G']
-    allele_stat = pd.DataFrame(columns=statnames, index=range(1, allele_len+1))
-    allele_stat['Pos'] = range(1, allele_len+1)
+    allele_stat = pd.DataFrame(columns=statnames, index=range(1, allele_len + 1))
+    allele_stat['Pos'] = range(1, allele_len + 1)
     allele_stat['Base'] = [l for l in allele_seq]
     allele_stat[['Mut', 'Total', 'Y', 'A', 'T', 'C', 'G']] = 0
     for i in range(1, allele_len + 1):
         if len(allele_mut) == 1:
             counts = {}
-            counts[allele_mut.ix[:,i].squeeze()] = 1
+            ### 20200916 Lawrence: updated .ix to .iloc
+            counts[allele_mut.iloc[:, i].squeeze()] = 1
         else:
-            counts = allele_mut.ix[:,i].squeeze().value_counts()
+            ### 20200916 Lawrence: updated .ix to .iloc
+            counts = allele_mut.iloc[:, i].squeeze().value_counts()
         countA = counts.get('A', 0)
         countT = counts.get('T', 0)
         countC = counts.get('C', 0)
@@ -872,7 +916,7 @@ def profile_DNAmut_clonal(inferseq, group, nuc_stat, nuc_PDF, nuc_profile, args)
         countTotal = countMut + counts.get('.', 0)
         allele_stat.loc[i, 'Mut'] = countMut
         allele_stat.loc[i, 'Total'] = countTotal
-        allele_stat.loc[i, 'Y'] = float(countMut/countTotal) if countTotal > 0 else 0
+        allele_stat.loc[i, 'Y'] = float(countMut / countTotal) if countTotal > 0 else 0
         allele_stat.loc[i, 'A'] = countA
         allele_stat.loc[i, 'T'] = countT
         allele_stat.loc[i, 'C'] = countC
@@ -882,13 +926,13 @@ def profile_DNAmut_clonal(inferseq, group, nuc_stat, nuc_PDF, nuc_profile, args)
     allele_stat.to_csv(nuc_stat, sep="\t", index=False)
 
     # Obtain CDR1,2 from preprocessed V allele alignment using KABAT definition, and CDR3 from IMGT definition
-    cdr3_start = len(inferseq[0:312].replace('N','')) + 1
+    cdr3_start = len(inferseq[0:312].replace('N', '')) + 1
     cdr3_end = cdr3_start + group["JUNCTION_LENGTH"].unique()[0]
     if allele in args.__dict__['V_CDR']:
         cdr = args.__dict__['V_CDR'][allele]
         cdrstring = 'cdr1_start=%s cdr1_end=%s cdr2_start=%s cdr2_end=%s ' \
                     'cdr3_start=%d cdr3_end=%d' % (cdr[0], cdr[1], cdr[2],
-                    cdr[3], cdr3_start, cdr3_end)
+                                                   cdr[3], cdr3_start, cdr3_end)
     else:
         cdrstring = ''
 
@@ -897,9 +941,11 @@ def profile_DNAmut_clonal(inferseq, group, nuc_stat, nuc_PDF, nuc_profile, args)
     anno = '_'.join(['Clone%d' % CLONE, allele, J_ALLELE])
 
     # Filter group with read number
+    ### 20200915 Lawrence: changed showsequence from false to true
     os.system('Rscript %s/HTGTSrep/R/SHMPlot2.R %s %s plotrows=1 figureheight=2 '
-              'showsequence=FALSE ymax=%f %s annotation=%s' % (args.scriptdir, nuc_stat,
-              nuc_PDF, args.ymax_DNA, cdrstring, anno))
+              'showsequence=TRUE ymax=%f %s annotation=%s' % (args.scriptdir, nuc_stat,
+                                                               nuc_PDF, args.ymax_DNA, cdrstring, anno))
+
 
 def profile_DNAmut_clonal_errbar(inferseq, group, nuc_stat_errbar, nuc_PDF_errbar, sample_files, args):
     ''' Prep DNA mutation profile, text and PDF file with error bars
@@ -924,8 +970,8 @@ def profile_DNAmut_clonal_errbar(inferseq, group, nuc_stat_errbar, nuc_PDF_errba
         stat_new = stat_new.astype('int64')
         stat_new['Base'] = stat_new['Base'].astype('str')
         stat_new['Y'] = stat_new['Y'].astype('float')
-        for i in range(1, pos_max+1):
-            cals = stat_all.loc[stat_all['Pos']==i]
+        for i in range(1, pos_max + 1):
+            cals = stat_all.loc[stat_all['Pos'] == i]
             Pos = i
             Mut = cals['Mut'].sum()
             Total = cals['Total'].sum()
@@ -935,10 +981,12 @@ def profile_DNAmut_clonal_errbar(inferseq, group, nuc_stat_errbar, nuc_PDF_errba
             C = cals['C'].sum()
             G = cals['G'].sum()
 
-            cals_Y = cals[cals['Total']>0]
+            cals_Y = cals[cals['Total'] > 0]
             Err = 0
-            if len(cals_Y) == 0: Y = 0
-            else: Y = cals_Y['Y'].sum()/len(cals_Y)
+            if len(cals_Y) == 0:
+                Y = 0
+            else:
+                Y = cals_Y['Y'].sum() / len(cals_Y)
             if len(cals_Y) > 1:
                 Err = sem(cals_Y['Y'])
             stat_new.loc[i] = [int(Pos), int(Mut), int(Total), str(Base), Y,
@@ -946,14 +994,14 @@ def profile_DNAmut_clonal_errbar(inferseq, group, nuc_stat_errbar, nuc_PDF_errba
         stat_new.to_csv(nuc_stat_errbar, sep="\t", index=False)
 
         # Obtain CDR1,2 from preprocessed V allele alignment using KABAT definition, and CDR3 from IMGT definition
-        cdr3_start = len(inferseq[0:312].replace('N','')) + 1
+        cdr3_start = len(inferseq[0:312].replace('N', '')) + 1
         cdr3_end = cdr3_start + group["JUNCTION_LENGTH"].unique()[0]
         # add this part as some allele names with [] anno
         if allele.split('[')[0] in args.__dict__['V_CDR']:
             cdr = args.__dict__['V_CDR'][allele.split('[')[0]]
             cdrstring = 'cdr1_start=%s cdr1_end=%s cdr2_start=%s cdr2_end=%s ' \
                         'cdr3_start=%d cdr3_end=%d' % (cdr[0], cdr[1], cdr[2],
-                        cdr[3], cdr3_start, cdr3_end)
+                                                       cdr[3], cdr3_start, cdr3_end)
         else:
             cdrstring = ''
 
@@ -961,6 +1009,7 @@ def profile_DNAmut_clonal_errbar(inferseq, group, nuc_stat_errbar, nuc_PDF_errba
         J_ALLELE = group["J_CALL"].unique()[0]
         anno = '_'.join(['Clone%d' % CLONE, allele, J_ALLELE])
         # Filter group with read number
+        ### 20200915 Lawrence: changed showsequence from false to true
         os.system('Rscript %s/HTGTSrep/R/SHMPlot2.R %s %s plotrows=1 figureheight=2 '
-                'showsequence=FALSE ymax=0.75 %s annotation=%s' % (args.scriptdir,
-                nuc_stat_errbar, nuc_PDF_errbar, cdrstring, anno))
+                  'showsequence=TRUE ymax=0.75 %s annotation=%s' % (args.scriptdir,
+                                                                     nuc_stat_errbar, nuc_PDF_errbar, cdrstring, anno))

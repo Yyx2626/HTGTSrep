@@ -1,4 +1,4 @@
-# stratify_and_Bayesian
+# stratify\_and\_Bayesian
 
 Some scripts for stratification and hierarchical Bayesian model for somatic hypermutation profile
 
@@ -9,7 +9,7 @@ Author: Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
 
 ### Step 0. Prepare .stat.txt and .nuc.txt files from HTGTSrep pipeline
 
-prepare background intrinsic non-productive .nuc.txt for each V gene in folder mut_profile/nucl_text/, with filenames \*.${Vgene}-01.NP.nuc.txt
+prepare background intrinsic non-productive .nuc.txt for each V gene in folder mut\_profile/nucl\_text/, with filenames \*.${Vgene}-01.NP.nuc.txt
 
 and prepare foreground clonotype .nuc.txt (and one .stat.txt) files in folder clonotype_files/, with filenames ${cln}.\*.nuc.txt (and ${cln}.\*.stat.txt)
 
@@ -22,7 +22,7 @@ and prepare foreground clonotype .nuc.txt (and one .stat.txt) files in folder cl
 
 ### Step 1. Stratify and merge nuc.txt files (output to stat.txt)
 
-traverse each clnV (clonotype_Vgene; for example, if clnV=clone12323_IGHV2, then cln=clone12323 and Vgene=IGHV2)
+traverse each clnV (clonotype\_Vgene; for example, if clnV=clone12323\_IGHV2, then cln=clone12323 and Vgene=IGHV2)
 
 ```bash
 for mutMaxProp in 0.025; do
@@ -75,9 +75,9 @@ done
 done   # end for mutMaxProp
 ```
 
-output to $basedir/foreground_clone/${clnV}\_01.all.stat.txt and $basedir/background_intrinsic/intrinsic_${Vgene}\_01.all.stat.txt
+output to $basedir/foreground\_clone/${clnV}\_01.all.stat.txt and $basedir/background\_intrinsic/intrinsic\_${Vgene}\_01.all.stat.txt
 
-then, symlink to $basedir/mcmc_rlt.20190911/
+then, symlink to $basedir/mcmc\_rlt.20190911/
 
 ```bash
 for mutMaxProp in 0.025; do
@@ -162,7 +162,7 @@ done   # end for clnV
 done   # end for mutMaxProp
 ```
 
-output to $basedir/mcmc_rlt.20190911/intrinsic_${Vgene}_01.site_\*.mcmc_rlt.tsv and $basedir/mcmc_rlt.20190911/${clnV}_01.site_\*.mcmc_rlt.tsv
+output to $basedir/mcmc\_rlt.20190911/intrinsic\_${Vgene}\_01.site\_\*.mcmc\_rlt.tsv and $basedir/mcmc\_rlt.20190911/${clnV}\_01.site\_\*.mcmc\_rlt.tsv
 
 ### Step 3. Posterior comparison
 
@@ -203,15 +203,15 @@ done
 done   # end for clnV
 ```
 
-intermediate output to $basedir/two_group_compare.20190911/${clnV}_01.final_${ss}_$ee.stat.txt
+intermediate output to $basedir/two\_group\_compare.20190911/${clnV}\_01.final\_${ss}\_$ee.stat.txt
 
-final output to $basedir/two_group_compare.20190911/${clnV}_01.final.stat.txt
+final output to $basedir/two\_group\_compare.20190911/${clnV}\_01.final.stat.txt
 
-Then, check muDiff_gt0_1_PEP column in Excel (muDiff_gt0_1_PEP = PEP(muDiff > 0.1) = 1 - P_posterior(muDiff > 0.1) ). Each row for one nucleotide position in the V gene. Those sites with PEP(muDiff > 0.1) < 0.5 are considered 'significant'.
+Then, check muDiff\_gt0\_1\_PEP column in Excel (muDiff\_gt0\_1\_PEP = PEP(muDiff > 0.1) = 1 - P_posterior(muDiff > 0.1) ). Each row for one nucleotide position in the V gene. Those sites with PEP(muDiff > 0.1) < 0.5 are considered 'significant'.
 
 ## Usage prompt
 
-### scripts/yyx_SHMPlot2_Strata_ErrBar.20190731.r 
+### scripts/yyx\_SHMPlot2\_Strata\_ErrBar.20190731.r 
 
 ```
 Usage: Rscript yyx_SHMPlot2_Strata_ErrBar.20190731.r [OPTS] output statfile nucfile
@@ -246,7 +246,7 @@ Arguments:
 	nucfile	file path of .nuc.txt file(s) - columns: Read_ID, base [ACGTN-.] on each position
 ```
 
-### scripts/yyx_stratify_from_nuc_to_merged_stat.20190906.r
+### scripts/yyx\_stratify\_from\_nuc\_to\_merged\_stat.20190906.r
 
 ```
 Usage: Rscript yyx_mut_rate_per_read.20190904.r [OPTS] output statfile nucfile
@@ -266,15 +266,15 @@ Arguments:
 	nucfile	file path of .nuc.txt file(s) - columns: Read_ID, base [ACGTN-.] on each position
 ```
 
-### hierarchical_Bayesian_model_jags_SHM_test.20190819/Yyx_one_group_JAGS.20190820.r
+### hierarchical\_Bayesian\_model\_jags\_SHM\_test.20190819/Yyx\_one\_group\_JAGS.20190820.r
 
 ```
 Usage: Rscript Yyx_one_group_JAGS.20190820.r <output_prefix> <merged.stat.txt> [pos_range] [colname_prefix]
 ```
 
-Note: it will use the Bayesian model setting in hierarchical_Bayesian_model_jags_SHM_test.20190819/Yyx_HierarPropBinom_JAGS_single.20190820.txt (in BUGS language)
+Note: it will use the Bayesian model setting in hierarchical\_Bayesian\_model\_jags\_SHM\_test.20190819/Yyx\_HierarPropBinom\_JAGS\_single.20190820.txt (in BUGS language)
 
-### hierarchical_Bayesian_model_jags_SHM_test.20190819/Yyx_two_group_compare.20190903.r
+### hierarchical\_Bayesian\_model\_jags\_SHM\_test.20190819/Yyx\_two\_group\_compare.20190903.r
 
 ```
 Usage: Rscript Yyx_two_group_compare.20190903.r <output_prefix> <in1_foreground_prefix> <in2_background_prefix> [pos_range]

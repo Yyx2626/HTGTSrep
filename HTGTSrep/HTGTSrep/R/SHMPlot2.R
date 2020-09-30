@@ -169,7 +169,8 @@ pdf(output,height=figureheight,width=11)
     #col=grey(0.5,0.5) --> col="green" on 3/18/2015 --> col=rgb(128,255,0,180)
 
     grid(col=grey(0.5))
-    if (showsequence) points(data$Pos[1]:tail(data$Pos,n=1),rep(refy,nrow(data)),col=basecolors[data$Style],pch=ascii[data$Style],cex=0.6)
+    # 202020916 Lawrence: pch=ascii[data$Style],cex=0.6) ->   pch=ascii[data$Style],cex=0.45)
+    if (showsequence) points(data$Pos[1]:tail(data$Pos,n=1),rep(refy,nrow(data)),col=basecolors[data$Style],pch=ascii[data$Style],cex=0.3)
     lines(plotline$x,plotline$y)
     if(annotation==''){
         genename = tail(strsplit(datafile, "/")[[1]],1)

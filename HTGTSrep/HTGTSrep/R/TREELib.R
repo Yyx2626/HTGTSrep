@@ -147,6 +147,13 @@ treeConstruct_sample <- function(sample_indexes, graph, dirpath){
         l <- unique(sample_indexes[[sample]])
         if (!is.null(l) & length(l) > 1){
             sdb <- db[db$SEQUENCE_ID %in% l,]
+            sdb$sequence_id <- sdb$SEQUENCE_ID
+            sdb$sequence_alignment <- sdb$SEQUENCE_IMGT
+            sdb$germline_alignment <- sdb$GERMLINE_IMGT_D_MASK
+            sdb$junction_length <- sdb$JUNCTION_LENGTH
+            sdb$v_call <- sdb$V_CALL
+            sdb$j_call <- sdb$J_CALL
+            sdb$clone_id <- sdb$CLONE
             sclone <- makeChangeoClone(sdb)
             sgraph <- buildPhylipLineage(sclone, dnapars_exec, rm_temp=TRUE)
             V(sgraph)$label[V(sgraph)$name %in% l] <- V(graph)$label[V(graph)$name %in% l]
@@ -155,6 +162,7 @@ treeConstruct_sample <- function(sample_indexes, graph, dirpath){
             outmat <- cbind(V(sgraph)$label, V(sgraph)$name, V(sgraph)$sequence)
             colnames(outmat) <- c("INDEX", "NAME", "SEQUENCE")
             write.table(outmat, paste(dirpath, graph$clone, ".", sample, ".txt", sep=""), sep = "\t",row.names = F, quote = F)
+            # message("TREELib outmat = ", colnames(outmat))
         }
     }
 }
