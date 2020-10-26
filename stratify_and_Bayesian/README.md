@@ -207,7 +207,7 @@ intermediate output to $basedir/two\_group\_compare.20190911/${clnV}\_01.final\_
 
 final output to $basedir/two\_group\_compare.20190911/${clnV}\_01.final.stat.txt
 
-Then, check muDiff\_gt0\_1\_PEP column in Excel (muDiff\_gt0\_1\_PEP = PEP(muDiff > 0.1) = 1 - P_posterior(muDiff > 0.1) ). Each row for one nucleotide position in the V gene. Those sites with PEP(muDiff > 0.1) < 0.5 are considered 'significant'.
+Then, check muDiff\_gt0\_1\_PEP column in Excel (muDiff\_gt0\_1\_PEP = PEP(muDiff > 0.1) = 1 - P_posterior(muDiff > 0.1) ). Each row for one nucleotide position in the V gene. Those sites with PEP(muDiff > 0.1) < 0.05 are considered 'significant'.
 
 ## Usage prompt
 
