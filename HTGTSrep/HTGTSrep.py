@@ -11,6 +11,7 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 from HTGTSrep.argparser import parse_args
 from HTGTSrep.preprocess import reads_process
 from HTGTSrep.igblast import run_IgBlast, parse_IgBlast
+
 from HTGTSrep.lib import files_process
 from HTGTSrep.mutprofile import mutProfile
 from HTGTSrep.clonal import clonal_main
@@ -27,6 +28,7 @@ def main():
         if not args.skipIgBlast:
             run_IgBlast(args)
         parse_IgBlast(args)
+        # clean up some files from IgBlast
         files_process(args, 'igblast_clean')
 
     if args.subcmd == 'mut':

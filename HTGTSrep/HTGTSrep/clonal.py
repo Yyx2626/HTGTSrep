@@ -7,12 +7,21 @@ from HTGTSrep.lib import getDNADistMatrix, calcDistances, formClusters, \
                          hier_clust, collapse_db, profile_DNAmut, getInputSeq, \
                          getInferSeq, profile_DNAmut_clonal, profile_DNAmut_clonal_errbar, hier_clust_CDR3_PEPTIDE
 from scipy.stats import sem
-
+'''06302021 JH: added the option to run individual clones only <args.parse_existing_clonal>'''
+'''06302021 JH: added the option to redefine clonal groups on existing data <args.parse_existing_clonal> see --help for more info'''
+'''06302021 JH: deprecated <collectiveClonesOnly>'''
+'''08092021 JH: fix issues with cluster_by_gene
+# cluster_by_gene is likely to have conflicts with TreeClones, so use with skipTree
+# cluster_by_gene may influence accuracy of mut profile due to lib.profile_DNAmut
+# only reference the clonal group membership
+'''
+'''08092021 JH: added verbose lines and labeled verbose output for better debugging'''
 def define_clones(records, args):
     '''
     Pre-group records based on V, J and junction length
     '''
     if args.cluster_by_gene:
+        # 08102021 JH: .str is needed for columns
         records['J_GENE'] = records['J_ALLELE'].str.split('*').str[0]
         grouped = records.groupby(['V_GENE', 'J_GENE', 'JUNCTION_LENGTH'])
     else:
@@ -42,18 +51,21 @@ def define_clones(records, args):
     return records
 
 def write_cloneDb(records, outputfile, args):
+    # 06/2021 JH: took out V_ALLELE_NUC from droplist for profile_DNAmut()
+    # took out GERMLINE_IMGT_D_MASK from droplist for profile_Protein()
+    # took out V_SEQ_LENGTH and V_GENE_GAP_LEN from droplist for profile_Protein()
+    # took out SEQUENCE_INPUT for _collapse_partial_NasDiff()
     droplist = ["V_BTOP", "STRAND",
     'D_SEQ_START', 'D_SEQ_LENGTH', 'D_GERM_START', 'D_GERM_LENGTH',
     'J_SEQ_START', 'J_SEQ_LENGTH', 'J_GERM_START', 'J_GERM_LENGTH',
     "NP1_LENGTH", "NP2_LENGTH",
-    "V_SEQ_START", "V_SEQ_LENGTH", "V_GENE_LEN", "V_GENE_GAP_LEN",
+    "V_SEQ_START", "V_GENE_LEN",
     "V_GERM_START_VDJ", "V_GERM_END_VDJ",
     "V_GERM_START_IMGT",
-    "V_ALLELE_NUC", "GERMLINE_IMGT_D_MASK",
-    "SEQUENCE_INPUT", "SEQUENCE_VDJ"]
+    "SEQUENCE_VDJ"]
     records_output = records.drop(droplist, axis=1)
     records_output.to_csv(outputfile, sep="\t", index=False)
-    if args.verbose: print(f"write_cloneDb to: {outputfile}", file=sys.stderr)
+    if args.verbose: print(f"[write_cloneDb|verbose] write_cloneDb to: {outputfile}", file=sys.stderr, flush = True)
 
 def AAprofile_clones(group, sample, args):
     ''' Do protein profiling
@@ -69,7 +81,10 @@ def AAprofile_clones(group, sample, args):
     reads_db = profile_Protein(group, protein_file, protein_PDF, Vgapseq, args)
     stat_file = "%s/%s_clonal/protein_text/%s.clone%d.%s.%s.protein.txt" % (
                     args.outdir, sample, sample, clone, args.muttype, args.productivetype)
-    stat_Protein(protein_file, Vgapseq, group['V_ALLELE'].values[0], reads_db)
+    V_ALLELE = group['V_ALLELE'].values[0]
+    # stat_Protein(protein_file, Vgapseq, V_ALLELE, reads_db) will find V_ALLELE in Vgapseq
+    # 08112021 JH: There may be inaccuracies when cluster_by_gene, since different alleles have different gapseq
+    stat_Protein(protein_file, Vgapseq, V_ALLELE, reads_db)
 
 def DNAprofile_clones(group, sample, args, profileType):
     """
@@ -77,6 +92,9 @@ def DNAprofile_clones(group, sample, args, profileType):
     """
     clone = group['CLONE'].values[0]
     V_ALLELE = group['V_ALLELE'].values[0]
+    # 08112021 JH: conditional change of V_ALLELE to adjust output name 'nuc_stat'
+    if args.cluster_by_gene:
+        V_ALLELE = str(V_ALLELE.split('*')[0])
     if profileType == 'sepCluster':
         dirprefix = "%s/%s_clonal" % (args.outdir, sample)
     elif profileType == 'mixCluster':
@@ -88,7 +106,8 @@ def DNAprofile_clones(group, sample, args, profileType):
                 dirprefix, clone, V_ALLELE, sample, args.muttype, args.productivetype)
     nuc_PDF = "%s/nucl_profile/clone%s.%s.%s.%s.pdf" % (
                 dirprefix, clone, sample, args.muttype, args.productivetype)
-
+    # 08112021 JH: this function will take in the first V_ALLELE and calculate mutation based on that...
+    # This result may be inaccurate when working with cluster_by_gene
     profile_DNAmut(group, nuc_stat, nuc_PDF, nuc_profile, args)
 
 def DNAprofile_clones_errbar(group, sample_errbar, args):
@@ -103,13 +122,25 @@ def DNAprofile_clones_errbar(group, sample_errbar, args):
                 dirprefix, clone, sample, args.muttype, args.productivetype)
         nuc_stat = "%s/nucl_text/clone%s_%s.%s.%s.%s.stat.txt" % (
                 dirprefix, clone, allele, sample, args.muttype, args.productivetype)
+        # 08112021 JH: added allele_output to adjust for output names
+        if args.cluster_by_gene:
+            allele_output = str(allele.split('*')[0])
+            nuc_stat = "%s/nucl_text/clone%s_%s.%s.%s.%s.stat.txt" % (
+                dirprefix, clone, allele_output, sample, args.muttype, args.productivetype)
         sample_files[sample] = [nuc_PDF, nuc_stat]
         ### print to find if the correct file paths are generated. trying to solve missing stat file
-        # print("finding ", sample_files[sample],file = sys.stderr)
+        if args.verbose: print("[DNAprofile_clones_errbar|verbose] finding sample_files[sample] = [nuc_PDF, nuc_stat] = ", sample_files[sample],
+              file=sys.stderr, flush=True)
     nuc_PDF_errbar = "%s/nucl_profile_errbar/clone%s.%s.%s.errbar.pdf" % (
             dirprefix, clone, args.muttype, args.productivetype)
     nuc_stat_errbar = "%s/nucl_text_errbar/clone%s_%s.%s.%s.stat.errbar.txt" % (
             dirprefix, clone, allele, args.muttype, args.productivetype)
+    # 08112021 JH: added allele_output to adjust for output names
+    if args.cluster_by_gene:
+        allele_output = str(allele.split('*')[0])
+        nuc_stat_errbar = "%s/nucl_text_errbar/clone%s_%s.%s.%s.stat.errbar.txt" % (
+            dirprefix, clone, allele_output, args.muttype, args.productivetype)
+
 
     # Load CDR3
     if allele in args.__dict__['V_CDR']:
@@ -119,10 +150,12 @@ def DNAprofile_clones_errbar(group, sample_errbar, args):
                     cdr[3], cdr[4], cdr[5])
     else:
         cdrstring = ''
+        rint(
+            f"[DNAprofile_clones_errbar|verbose]: {allele} in {sample} is not found in args.genecdr: {args.genecdr}; used for .../HTGTSrep/R/SHMPlot2.R")
 
     if len(sample_errbar) == 1:
         nuc_PDF_sample = sample_files[sample_errbar[0]][0]
-        print("DNAprofile_clones_errbar did not output a file, because len(sample_errbar) == 1", file = sys.stderr)
+        print("[DNAprofile_clones_errbar] did not output a file, because len(sample_errbar) == 1", file = sys.stderr,flush=True)
         # if os.path.exists(nuc_PDF_sample):
         #     os.system('cp %s %s' % (nuc_PDF_sample, nuc_PDF_errbar))
     else:
@@ -185,13 +218,14 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
             SEQUENCE_ID = row['SEQUENCE_ID']
             SEQUENCE_IMGT = row['SEQUENCE_IMGT'] + 'N' * padding_length
             SEQUENCE_IMGT = SEQUENCE_IMGT[0:len(seq_Dmask)]
+            # JH: this is to be commented out if missing SEQUENCE_IMGT; see 06302021 version
             records_tree.loc[records_tree['SEQUENCE_ID']==SEQUENCE_ID, 'SEQUENCE_IMGT'] = SEQUENCE_IMGT
 
     # Get lineage tree from collapsed records
     ### these two statements help find keyError
-    if args.verbose: print("sample in treeClone =",sample,file=sys.stderr)
+    if args.verbose: print("[Tree_clones|verbose] sample in treeClone =",sample,file=sys.stderr)
     ## 0 HERE
-    print("records.size before collapse_db:", records.size, file=sys.stderr)
+    # print("records.size before collapse_db:", records.size, file=sys.stderr)
     records_collapse = collapse_db(records_tree, 'partial', 'F')
     records_collapse['DUPCOUNT'] = 1
     for index, row in records_collapse.iterrows():
@@ -232,8 +266,10 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
             treefile = "%s/%s_clonal/lineageTree/%d.txt" % (args.outdir, sample, key)
             if os.path.exists(treefile):
                 inferseq = getInferSeq(treefile, group)
-                if args.verbose: print("type of inferseq", type(inferseq), file=sys.stderr)
                 V_ALLELE = group["V_ALLELE"].unique()[0]
+                # 08062021 JH: V_ALLEL is conditionally modified for compatible output paths 'nuc_stat'
+                if args.cluster_by_gene:
+                    V_ALLELE = str(V_ALLELE.split('*')[0])
                 nuc_stat = "%s/nucl_text_infer/clone%s.%s.%s.%s.%s.stat.txt" % (
                             dirprefix, key, V_ALLELE, sample, args.muttype, args.productivetype)
                 nuc_profile = "%s/nucl_text_infer/clone%s.%s.%s.%s.%s.nuc.txt" % (
@@ -253,6 +289,9 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
         short_list = ["s%d" % i for i in range(1, len(sample_list)+1)]
         for key, group_clone in records_tree.groupby('CLONE'):
             V_ALLELE = group_clone["V_ALLELE"].unique()[0]
+            # 08062021 JH: V_ALLEL is conditionally modified for compatible output paths 'nuc_stat'
+            if args.cluster_by_gene:
+                V_ALLELE = str(V_ALLELE.split('*')[0])
             sample_files = {}
             rootfile = "%s/allsample_clonal/lineageTree/%d.txt" % (args.outdir, key)
             if not os.path.exists(rootfile): continue
@@ -309,12 +348,13 @@ def series_analyze_onesample(records, sample, args):
     ### 09162020 Lawrence: added print(...)
     # show the current sample
     if args.verbose:
-        print("current sample:", sample, file=sys.stderr)
-        print("records before define_clones() is called:", records.size, file=sys.stderr)
+        print("[series_analyze_onesample|verbose] current sample:", sample, file=sys.stderr)
+        print("[series_analyze_onesample|verbose] records before define_clones() is called:", records.size, file=sys.stderr)
     # Define clones and write IgBlast Db files
     records = define_clones(records, args)
-    if args.verbose: print("records after define_clones() is called:", records.size, file=sys.stderr)
+    if args.verbose: print("[series_analyze_onesample|verbose] records after define_clones() is called:", records.size, file=sys.stderr)
     outputfile = '%s/%s_clonal/%s.db_clone.xls' % (args.outdir, sample, sample)
+
     write_cloneDb(records, outputfile, args)
 
     # Generate mutation profile
@@ -387,6 +427,10 @@ def clone_stat(records, statfile, sampletype, args):
         V_ALLELE = group["V_ALLELE"].value_counts().keys()[0]
         D_ALLELE = group["D_ALLELE"].value_counts().keys()[0]
         J_ALLELE = group["J_ALLELE"].values[0]
+        # 08062021 JH: show V_GENE, J_GENE
+        if args.cluster_by_gene:
+            V_ALLELE = str(V_ALLELE.split('*')[0])
+            J_ALLELE = str(J_ALLELE.split('*')[0])
         if args.CDR3_AA_Clones:
             JUNC_LEN = len(group['CDR3_SEQ'].values[0])
             JUNC_NUM = len(group['CDR3_SEQ'].unique())
@@ -469,7 +513,7 @@ def series_analyze_allsample(records, samplelist, args):
     else:
         scriptLocation = '%s/HTGTSrep/junctionsPerLibs_CDR3_AA.py' % (args.scriptdir)
         os.system("python3 {0} {1} {2} > {3}".format(scriptLocation, statfile, listSamples, masterstatfile)) ###junctionsperlibs_CDR3_AA
-    if args.verbose: print("python3 {0} {1} {2} > {3}".format(scriptLocation, statfile, listSamples, masterstatfile), file=sys.stderr)
+    print("python3 {0} {1} {2} > {3}".format(scriptLocation, statfile, listSamples, masterstatfile), file=sys.stderr)
     ###create lib detail file
     libdetailfile = '%s/allsample_clonal/allsample.lib_detail.xls' % (args.outdir)
     libScript = '%s/HTGTSrep/libConsensus_clonal.py' % (args.scriptdir)
@@ -509,64 +553,102 @@ def series_analyze_allsample(records, samplelist, args):
     if not args.skipTree:
         Tree_clones(records, 'allsample', args, sample_errbar)
 
+
+def read_existing_db_clone_xls(args, results):
+    sample_path = args.__dict__['sample_path']
+    for sample in sample_path:
+        outputfile = '%s/%s_clonal/%s.db_clone.xls' % (args.outdir, sample, sample)
+        try:
+            existing_db = pd.read_csv(outputfile,sep='\t')
+            results.append(existing_db)
+
+            print(f"[parse_existing_clonal]: Reading in {outputfile}", file=sys.stderr, flush=True)
+            print(f"[parse_existing_clonal]: {outputfile} shape = {existing_db.shape}", file=sys.stderr, flush=True)
+        except:
+            print(f"[parse_existing_clonal]: Failed to open {outputfile}", file=sys.stderr, flush=True)
+            raise NameError
+    return results
+
+
+
 def clonal_main(args):
     logging.info('Loading reads database')
     # Collapse reads
     sample_path = args.__dict__['sample_path']
     pool = multiprocessing.Pool(processes = len(sample_path))
     results = []
-    for sample in sample_path:
-        path = sample_path[sample]
-        dbpath = path + '/%s.db.xls' % sample
-        records = pd.read_csv(dbpath, sep="\t")
-        # added debugging lines that will be printed if --verbose is specified
-        if args.verbose:
-            print(f"records path {dbpath}", file=sys.stderr)
-            print(f"records.shape after being read ={records.shape}", file=sys.stderr)
-        # Filter records using V coverage, CDR3 length, whether 'N' in CDR3
-        records = records.loc[records['V_COVERAGE'] > args.min_Vcov, ]
-        if args.verbose: print(f"records.shape after V_COVERAGE ={records.shape}", file=sys.stderr)
-        records["JUNCTION_LENGTH"] = records.CDR3_SEQ.map(len)
-        records = records.loc[records['JUNCTION_LENGTH'] > 1, ]
-        if args.verbose: print(f"records.shape after JUNCTION_LENGTH ={records.shape}", file=sys.stderr)
-        records = records.loc[records['SEQUENCE_IMGT'] != '-', ]
-        if args.verbose: print(f"records.shape after SEQUENCE_IMGT ={records.shape}", file=sys.stderr)
+    if not args.parse_existing_clonal:
+        for sample in sample_path:
+            path = sample_path[sample]
+            dbpath = path + '/%s.db.xls' % sample
+            records = pd.read_csv(dbpath, sep="\t")
+            # added debugging lines that will be printed if --verbose is specified
+            if args.verbose:
+                print(f"[clonal_main|verbose] rrecords path {dbpath}", file=sys.stderr)
+                print(f"[clonal_main|verbose] records.shape after being read ={records.shape}", file=sys.stderr)
+            # Filter records using V coverage, CDR3 length, whether 'N' in CDR3
+            records = records.loc[records['V_COVERAGE'] > args.min_Vcov, ]
+            if args.verbose: print(f"[clonal_main|verbose] records.shape after V_COVERAGE ={records.shape}", file=sys.stderr)
+            records["JUNCTION_LENGTH"] = records.CDR3_SEQ.map(len)
+            records = records.loc[records['JUNCTION_LENGTH'] > 1, ]
+            if args.verbose: print(f"[clonal_main|verbose] records.shape after JUNCTION_LENGTH ={records.shape}", file=sys.stderr)
+            records = records.loc[records['SEQUENCE_IMGT'] != '-', ]
+            if args.verbose: print(f"[clonal_main|verbose] records.shape after SEQUENCE_IMGT ={records.shape}", file=sys.stderr)
 
-        records['SAMPLE'] = sample
-        records['CDR3_MASK'] = [re.sub('[\.-]', 'N', seq) for seq in records.CDR3_SEQ]
-        #records = records.convert_dtypes()
-        #dtypes = records.dtypes
-        #print(f"records={dbpath}, dtypes = {dtypes}", file=sys.stderr)
-        #print(f"records.shape before filtering ={records.shape}", file=sys.stderr)
-        if args.skipCDR3withN:
-            records["CDR3_MASK"] = records["CDR3_MASK"].astype("str")
-            records = records[~records['CDR3_MASK'].str.contains("N")]
-        if args.muttype == 'MutOnly':
-            records = records.loc[records['V_MUTATION'] > 0, ]
-        elif args.muttype == 'noMut':
-            records = records.loc[records['V_MUTATION'] == 0, ]
-        if args.productivetype == 'P':
-            records = records.loc[records['PRODUCTIVE'] == 'T', ]
-        elif args.productivetype == 'NP':
-            records = records.loc[records['PRODUCTIVE'] == 'F', ]
-        #print(f"records.shape after filtering ={records.shape}", file=sys.stderr)
+            records['SAMPLE'] = sample
+            records['CDR3_MASK'] = [re.sub('[\.-]', 'N', seq) for seq in records.CDR3_SEQ]
+            #records = records.convert_dtypes()
+            #dtypes = records.dtypes
+            #print(f"records={dbpath}, dtypes = {dtypes}", file=sys.stderr)
+            #print(f"records.shape before filtering ={records.shape}", file=sys.stderr)
+            if args.skipCDR3withN:
+                records["CDR3_MASK"] = records["CDR3_MASK"].astype("str")
+                records = records[~records['CDR3_MASK'].str.contains("N")]
+                if args.verbose: print(f"[clonal_main|verbose] records.shape after skipCDR3withN ={records.shape}",
+                                       file=sys.stderr, flush=True)
+            if args.muttype == 'MutOnly':
+                records = records.loc[records['V_MUTATION'] > 0, ]
+                if args.verbose: print(f"[clonal_main|verbose] records.shape after MutOnly ={records.shape}",
+                                       file=sys.stderr, flush=True)
+            elif args.muttype == 'noMut':
+                records = records.loc[records['V_MUTATION'] == 0, ]
+                if args.verbose: print(f"[clonal_main|verbose] records.shape after noMut ={records.shape}",
+                                       file=sys.stderr, flush=True)
+            if args.productivetype == 'P':
+                records = records.loc[records['PRODUCTIVE'] == 'T', ]
+                if args.verbose: print(f"[clonal_main|verbose] records.shape after P ={records.shape}",
+                                       file=sys.stderr, flush=True)
+            elif args.productivetype == 'NP':
+                records = records.loc[records['PRODUCTIVE'] == 'F', ]
+                if args.verbose: print(f"[clonal_main|verbose] records.shape after NP ={records.shape}",
+                                       file=sys.stderr, flush=True)
 
-        # Run series analysis with multiprocessing   result = series_analyze_onesample(records, sample, args)
-        if not args.collectiveClonesOnly:
+            #print(f"records.shape after filtering ={records.shape}", file=sys.stderr)
+
+            # Run series analysis with multiprocessing   result = series_analyze_onesample(records, sample, args)
+            # collectiveClonesOnly deprecated
+            #if not args.collectiveClonesOnly:
+            #    result = pool.apply_async(series_analyze_onesample, (records, sample, args,))
+            #    results.append(result)
+            #else:
+            #    results.append(records)
             result = pool.apply_async(series_analyze_onesample, (records, sample, args,))
             results.append(result)
-        else:
-            results.append(records)
-    pool.close()
-    pool.join()
+        pool.close()
+        pool.join()
+
 
     # Analysis in all samples
     #print("frame: results=",results, file = sys.stderr)
     ### frame: results= [<multiprocessing.pool.ApplyResult object at 0x7fe95d9d13d0>, ....,]
-    if not args.collectiveClonesOnly:
+    # 08112021 JH: implement parse_existing_clonal and run_individual_samples_only
+    if not args.parse_existing_clonal and not args.run_individual_samples_only:
         frames = [result.get() for result in results]
         records_allsample = pd.concat(frames, ignore_index=True)
-    else:
+    elif args.parse_existing_clonal:
+        results = read_existing_db_clone_xls(args, results)
         records_allsample = pd.concat(results,ignore_index=True)
 
-    series_analyze_allsample(records_allsample, sample_path.keys(), args)
+    if not args.run_individual_samples_only: series_analyze_allsample(records_allsample, sample_path.keys(), args)
+    else:
+        print(f"[run_individual_samples_only]: mix_clone files will not be generated. To obtain public clonal groups, do --parse_existing_clonal with samples of interest in -d",file=sys.stderr,flush=True)
