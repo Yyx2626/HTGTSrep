@@ -59,9 +59,10 @@ def check_metafile(args, metapath):
 def create_dir(args):
     if args.subcmd in ['preprocess', 'run']:
         logdir = '%s/logs' % args.outdir
-    if args.subcmd in ['mut', 'clonal']:
+    if args.subcmd in ['mut']:
         logdir = '%s/logs' % args.dir
-
+    if args.subcmd in ['clonal']:
+        logdir = '%s/logs' % args.outdir
     if not os.path.exists(logdir):
         os.system('mkdir -p %s' % logdir)
     if args.subcmd == "preprocess":
@@ -248,6 +249,7 @@ def prepare_IgBlast(args):
             os.system('gunzip %s/*.gz' % sampledir)
 
     if not args.nproc: args.nproc = len(args.metadict)
+    print(f"args.Vdb: {args.Vdb}, args.Ddb: {args.Ddb}, args.Jdb: {args.Jdb}", file = sys.stderr)
 
 def check_params(args, path=None):
     if path is None:
@@ -308,8 +310,9 @@ def check_clonal(args):
         parampath = path + '/../logs/pipeline.run.param'
         if not os.path.exists(dbpath):
             sys.exit('Cannot find database file %s' % dbpath)
-        if not os.path.exists(parampath):
-            sys.exit('Cannot find param file %s' % parampath)
+        # this parampath has already been checked above. Commented out - JH 06042021
+        # if not os.path.exists(parampath):
+            # sys.exit('Cannot find param file %s' % parampath)
         sample_path[sample] = path
         if not os.path.exists('%s/%s_clonal' % (args.outdir, sample)):
             os.system('mkdir -p %s/%s_clonal/nucl_text' % (args.outdir, sample))
@@ -448,6 +451,9 @@ def parentParser(subname):
                             help = "Metadata file" )
         parser.add_argument("-o", required = True, dest = "outdir", type = str,
                             help = "Output directory" )
+        parser.add_argument("--skipDemultiplex", action='store_true',
+                            dest='skipDemultiplex', default=False,
+                            help = "Specifiy to skip Demultiplex and all upstream steps" )   # 2021-05-19, Adam_Yyx add this line
         parser.add_argument("--keepunmatch", action='store_true',
                             dest='keepunmatch', default=False,
                             help = "Keep unmatched reads from demultiplexing")
@@ -455,6 +461,8 @@ def parentParser(subname):
                             help = "Use N (12) bp of barcode+primer to demultiplex" )
         parser.add_argument("--demulti_mismatch", type = int, default = 0,
                             help = "N-maximum mismatch (0) to demultiplex" )
+        parser.add_argument("--demulti_distance", type = int, default = 0,
+                            help = " Require a minimum distance of N between the best and next best (fastq-multx -d N)" )
         parser.add_argument("--overlap", type = int, default = 10,
                             help = "N-minimum overlap to join paired reads (10)" )
         parser.add_argument("--diffpercent", type = int, default = 8,
@@ -495,7 +503,7 @@ def parentParser(subname):
         parser.add_argument("--Vgapseq", type = str,
                             help = '''Specify V IMGT-gapped sequences file. ''' )
         parser.add_argument("--V_score", type = int, default = 150,
-                            help = "Minimum IgBlast score of V gene (150)" )
+                            help = "Minimum IgBlast score of V gene (150). This is termed 'bit score' in IgBlast output, and is a way to compare " )
         parser.add_argument("--V_identity", type = float, default = 0.9,
                             help = "Minimum V identity ratio (0.9)" )
         parser.add_argument("--V_coverage", type = float, default = 0.1,
@@ -506,21 +514,32 @@ def parentParser(subname):
                             help = "Specify J gene for alignment. eg: IGHJ4" )
         parser.add_argument("--J_length", type = int, default = 34,
                             help = "Minimum alignment length of J gene (34)." )
+        # 06162021 Sai: DNA fragments are not long enough to extend into J region, baiting from V
+        parser.add_argument("--skipJAlignmentFilter", action='store_true',
+                            help = "Reads that do not have J alignment information will not be filtered out" )
         parser.add_argument("--checkProductive", action='store_true',
                             dest='checkProductive', default=False,
                             help = "Include only records with productive information" )
-        parser.add_argument("--skipDedup", action='store_true',
-                            dest='skipDedup', default=False,
-                            help = "Specify to skip generate duplicated-removed output" )
+        #parser.add_argument("--skipDemultiplex", action='store_true',
+        #                    dest='skipDemultiplex', default=False,
+        #                    help = "Specifiy to skip Demultiplex and all upstream steps" )   # 2021-05-19, Adam_Yyx comment out this line (move to preprocess)
+        parser.add_argument("--skipPreprocess", action='store_true',
+                            dest='skipPreprocess', default=False,
+                            help = "Specifiy to skip preprocess" )   # 2021-05-19, Adam_Yyx add this line
         parser.add_argument("--skipIgBlast", action='store_true',
                             dest='skipIgBlast', default=False,
                             help = "Specify to skip IgBlast and all upstream steps" )
+        parser.add_argument("--parallelParseIgBlast", type = str, default="None",
+                help = "Specify the level of parallelization for parse IgBlast (None|Sample|Subset|Sample_Subset|Skip)")   # 2021-05-20, Adam_Yyx add this line
+        parser.add_argument("--force_output", action='store_true',
+                            dest='force_output', default=False,
+                            help = "Should I overwrite existing db files? (False|True)" )
         parser.add_argument("--skipUnjoined", action='store_true',
                             dest='skipUnjoined', default=False,
                             help = "Specify to skip unjoined reads in parsing igblast db" )
-        parser.add_argument("--skipDemultiplex", action='store_true',
-                            dest='skipDemultiplex', default=False,
-                            help = "Specifiy to skip Demultiplex and all upstream steps" )
+        parser.add_argument("--skipDedup", action='store_true',
+                            dest='skipDedup', default=False,
+                            help = "Specify to skip generate duplicated-removed output" )
         parser.add_argument("--D_upstream", action='store_true',
                             dest='D_upstream', default=False,
                             help = '''Specify to consider D upstream regions
@@ -587,7 +606,6 @@ def parentParser(subname):
                             reads (P/NP/all, default: noProd_filter)""")
         parser.add_argument("--ymax_protein", type = float, default = 0.3,
                             help = "Maximum of Y axis in protein profile (0.3)" )
-
         parser.add_argument("--min_profileread", type = int, default = 20,
                             help = "The minimum read number (>=10) of one clonal \
                             for mutation profile (0)")
@@ -606,7 +624,23 @@ def parentParser(subname):
         parser.add_argument("--skipCDR3withN", action='store_true',
                             default=False, help = "Skip reads with 'N' in their CDR3 sequences.")
         parser.add_argument("--cluster_by_gene", action='store_true',
-                            default=False, help = "Use (V/J)_gene instead of (V/J)_allele in clonal clustering" )
+                            default=False, help = "Use gene instead of allele in clonal clustering" )
+        # added switches: CDR3_AA_Clones and skipIndividualClones for Human tonsil repertoire analysis
+        parser.add_argument("--CDR3_AA_Clones", action='store_true',
+                            default=False, help = "Form clonal clusters based on CDR3_PEPTIDE sequences" )
+        parser.add_argument("--collectiveClonesOnly", action='store_true',
+                            default=False, help = "Skip clonal analysis on individual samples; only derive clonal groups across all samples; deprecated 06302021" )
+        parser.add_argument("--verbose", action='store_true',
+                            default=False, help = "Print debugging lines" )
+        parser.add_argument("--onlyParse", action='store_true',
+                            default=False, help = "For debugging" )
+        parser.add_argument("--run_individual_samples_only", action='store_true',
+                            default=False, help = "When activated, clonal analysis will be run within each sample." )
+        parser.add_argument("--parse_existing_clonal", action='store_true',
+                            default=False, help = "When activated, clonal analysis will be run on a pool of samples that had previously been analyzed. make sure each sample has sSAMSAMPLE.db_clone.xls" )
+        parser.add_argument("--Vdb", type = str, help = "Specify IgBlast germline V database." )
+        parser.add_argument("--Ddb", type = str, help = "Specify IgBlast germline D database." )
+        parser.add_argument("--Jdb", type = str, help = "Specify IgBlast germline J database." )
 
         # parser.add_argument("--norm", type = str,
         #                     choices = ['len', 'mut', 'none'], default = 'len',

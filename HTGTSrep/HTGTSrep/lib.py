@@ -2,8 +2,13 @@
 import random, os, sys, logging, re
 import pandas as pd
 from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.Alphabet import IUPAC
+try:
+    from Bio.Alphabet import generic_dna, IUPAC
+    Bio_Alphabet = True
+except ImportError:
+    Bio_Alphabet = None
+    # usages of generic_dna, IUPAC are not supported in Biopython 1.78 (September 2020).
+    print(f"The installed BioPython is a new version that has removed the Alphabet module.",file=sys.stderr)
 
 import numpy as np
 from itertools import combinations, product
@@ -65,7 +70,7 @@ def getInputSeq(seq_file):
     """
     ### add print message to warn for empty dict
     if not os.path.exists(seq_file):
-        print("%s FAILED TO LOAD. EMPTY DICT IS RETURNED. THIS MAY INFLUENCE YOUR RESULTS" % seq_file, file=sys.stderr)
+        print("[getInputSeq] %s FAILED TO LOAD. EMPTY DICT IS RETURNED. THIS MAY INFLUENCE YOUR RESULTS" % seq_file, file=sys.stderr, flush=True)
         return {}
 
     if seq_file.endswith('.gz'):
@@ -73,8 +78,10 @@ def getInputSeq(seq_file):
         seq_file_unzip = seq_file.rstrip('.gz')
     else:
         seq_file_unzip = seq_file
-
-    seq_dict = SeqIO.index(seq_file_unzip, "fasta", IUPAC.ambiguous_dna)
+    if Bio_Alphabet:
+        seq_dict = SeqIO.index(seq_file_unzip, "fasta", IUPAC.ambiguous_dna)
+    else:
+        seq_dict = SeqIO.index(seq_file_unzip, "fasta")
 
     # Create a seq_dict ID translation using IDs truncate up to space or 50 chars
     seqs = {}
@@ -83,12 +90,11 @@ def getInputSeq(seq_file):
 
     ### .fa files may have a header preceeding each gene. This chunk is added to make sure the header is removed
     ### can't change the brackets, otherwise keyerror
-    if ".fa" in seq_file_unzip:
-        keys = list(seqs.keys())
+    keys = list(seqs.keys())
         # obtain a list of keys stripped of the header
-        for i in range(len(keys)):
-            keys[i] = keys[i].replace("lcl|", "", 1)
-        seqs = dict(zip(keys, list(seqs.values())))
+    for i in range(len(keys)):
+        keys[i] = keys[i].replace("lcl|", "", 1)
+    seqs = dict(zip(keys, list(seqs.values())))
 
     if seq_file.endswith('.gz'):
         os.system('gzip %s' % seq_file_unzip)
@@ -359,10 +365,16 @@ def files_process(args, worktype):
             os.system('mv {0}/*IgBlast.db {0}/igblast_db'.format(eachdir))
             # if args.genomealign == 'T':
             #     os.system('mv %s/*.sam %s/bowtie_sam' % (eachdir, eachdir))
-            os.system('gzip %s/reads_fast*/*' % (eachdir))
-            os.system('gzip %s/igblast*/*' % eachdir)
+            # JH 05042021
+            # os.system('gzip %s/reads_fast*/*' % (eachdir))
+            os.system('gzip -f %s/reads_fasta/*.fa' % (eachdir))
+            os.system('gzip -f %s/reads_fastq/*.fq' % (eachdir))
+            os.system('gzip -f %s/reads_fastq/*.list' % (eachdir))
+            # os.system('gzip %s/igblast/*' % eachdir)
+            os.system('gzip -f %s/igblast_db/*.IgBlast.db' % eachdir)
+            os.system('gzip -f %s/igblast_raw/*.IgBlast' % eachdir)
         if os.path.exists('%s/unmatched/' % args.outdir):
-            os.system('gzip %s/unmatched/*' % args.outdir)
+            os.system('gzip -q %s/unmatched/*' % args.outdir)
 
 def getNmers(sequences, n):
     """
@@ -371,6 +383,7 @@ def getNmers(sequences, n):
     Arguments:
       sequences : List of sequences to be broken into n-mers
       n : Length of n-mers to return
+      n == 1
 
     Returns:
       dict : Dictionary mapping sequence to a list of n-mers
@@ -431,7 +444,7 @@ def scoreDNA(a, b, mask_score=None, gap_score=None):
 def getDNADistMatrix(mat=None, mask_dist=0, gap_dist=0):
     """
     Generates a DNA distance matrix
-
+    Specifies a matrix of distance scores eg A==A=> similarity score=1 / distance =0
     Arguments:
       mat : Input distance matrix to extend to full alphabet;
             if unspecified, creates Hamming distance matrix that incorporates
@@ -491,6 +504,9 @@ def calcDistances(sequences, n, dist_mat, norm, sym):
     # Iterate over combinations of input sequences
     for j, k in combinations(list(range(len(sequences))), 2):
         # Only consider characters and n-mers with mutations
+        # nmer==seq == [list of bases in seqs_uniq]
+        # mutated==where seq1 != seq2
+        # in our case no need for dist_mat;add the number of diff aa and norm by aa len=>distance
         mutated = [i for i, (c1, c2) in enumerate(zip(sequences[j], sequences[k])) if c1 != c2]
         seq1 = [sequences[j][i] for i in mutated]
         seq2 = [sequences[k][i] for i in mutated]
@@ -537,6 +553,7 @@ def formClusters(dists, link, distance):
       list : List of cluster assignments
     """
     # Make distance matrix square
+    # squareform turns square matrix to vector, or vector to square matrix
     dists = squareform(dists)
     # Compute linkage
     links = linkage(dists, link)
@@ -546,10 +563,12 @@ def formClusters(dists, link, distance):
 
 def hier_clust(group, distance):
     """
+    distance = 0.1 in Yuxiang/Huan
     Form clusters based on hierarchical clustering of input distance matrix with
     linkage type and cutoff distance
     """
-    dict_seqID = group.set_index('CDR3_MASK').to_dict()['SEQUENCE_ID']
+    # This line was never used --> commented out JH 06032021
+    # dict_seqID = group.set_index('CDR3_MASK').to_dict()['SEQUENCE_ID']
     seqs = group['CDR3_MASK'].tolist()
     IDs = group['SEQUENCE_ID'].tolist()
     seqs_uniq = list(set(seqs))
@@ -562,10 +581,11 @@ def hier_clust(group, distance):
     if len(seqs_uniq) == 1:
         clone_tmp = [IDs[0] for i in range(len(IDs))]
     else:
+        # dist_mat is a scoring matrix that specifies the distance bewteen pairs of chars
         dist_mat = getDNADistMatrix(mask_dist=0, gap_dist=0)
         dists = calcDistances(seqs_uniq, 1, dist_mat, 'len', 'avg')
         # Perform hierarchical clustering
-        lineage = 'single'
+        lineage = 'single'  # the shorted distance
         clusters = formClusters(dists, lineage, distance)
 
         # Turn clusters into clone dictionary
@@ -579,24 +599,102 @@ def hier_clust(group, distance):
     return clone_tmp
 
 
+def hier_clust_CDR3_PEPTIDE(group, distance):
+    """
+    distance = 0.1 in Yuxiang/Huan
+    Form clusters based on hierarchical clustering of input distance matrix with
+    linkage type and cutoff distance, based on CDR3 aa sequence
+    """
+
+    def calcDistances_AA(sequences, norm):
+        """
+        Calculate pairwise distances between input peptide sequences
+
+        Arguments:
+          sequences : List of sequences for which to calculate pairwise distances
+          n : Length of n-mers to be used in calculating distance
+          dist_mat : pandas.DataFrame of mutation distances
+          norm : Normalization method
+          sym : Symmetry method
+
+        Returns:
+          ndarray : numpy matrix of pairwise distances between input sequences
+        """
+        # Initialize output distance matrix
+        dists = np.zeros((len(sequences), len(sequences)))
+        # Iterate over combinations of input sequences
+        for j, k in combinations(list(range(len(sequences))), 2):
+            # Find locations with mutations
+            mutated = [i for i, (c1, c2) in enumerate(zip(sequences[j], sequences[k])) if c1 != c2]
+            seq1 = [sequences[j][i] for i in mutated]
+            seq2 = [sequences[k][i] for i in mutated]
+            # Determine normalizing factor
+            if norm == 'len':
+                norm_by = len(sequences[0])
+            else:
+                norm_by = 1
+            # Calculate distances
+            try:
+                dists[j, k] = dists[k, j] = \
+                    sum([1 if c1 != c2 else 0 for c1, c2 in zip(seq1, seq2)]) / \
+                    (norm_by)
+            except (KeyError):
+                raise KeyError('Unrecognized character in sequence.')
+        return dists
+    seqs = group['CDR3_PEPTIDE'].tolist()
+    IDs = group['SEQUENCE_ID'].tolist()
+    seqs_uniq = list(set(seqs))
+    seq_map = {}
+    for key, row in group.iterrows():
+        seq = row['CDR3_PEPTIDE']
+        ID = row['SEQUENCE_ID']
+        seq_map.setdefault(seq, []).append(ID)
+
+    if len(seqs_uniq) == 1:
+        clone_tmp = [IDs[0] for i in range(len(IDs))]
+    else:
+        dists = calcDistances_AA(seqs_uniq, 'len')
+        # Perform hierarchical clustering
+        lineage = 'single'  # the shorted distance
+        clusters = formClusters(dists, lineage, distance)
+
+        # Turn clusters into clone dictionary
+        clone_dict = {}
+        for i, c in enumerate(clusters):
+            cdr3seq = seqs_uniq[i]
+            for seq_id in seq_map[cdr3seq]:
+                clone_dict[seq_id] = c
+        clone_tmp = ['%s_%d' % (IDs[0], clone_dict[seq_id]) for seq_id in IDs]
+    return clone_tmp
+
+
 def getGermdict(args):
     ''' Read VDJ IgBlast database and obtain un-gapped germline sequences
-    	2020/09 Lawrence: Add in a check condition to ensure databases are read properly
+    	2020/09 JH: Add in a check condition to ensure databases are read properly
     '''
     germ_dict = {}
-    Vdb = getInputSeq(args.params_dict['Vdb'])
-    Ddb = getInputSeq(args.params_dict['Ddb'])
-    Jdb = getInputSeq(args.params_dict['Jdb'])
+    try:
+        Vdb = getInputSeq(args.params_dict['Vdb'])
+    except AttributeError:
+        Vdb = getInputSeq(args.Vdb)
+    try:
+        Ddb = getInputSeq(args.params_dict['Ddb'])
+    except AttributeError:
+        Ddb = getInputSeq(args.Ddb)
+    try:
+        Jdb = getInputSeq(args.params_dict['Jdb'])
+    except AttributeError:
+        Jdb = getInputSeq(args.Jdb)
     if not bool(Vdb):
-        print('FAILED TO LOAD %s' % args.params_dict['Vdb'], file = sys.stderr)
+        print('[getGermdict] Vdb is empty... FAILED TO LOAD %s' % args.params_dict['Vdb'], file = sys.stderr, flush=True)
     else:
         germ_dict.update(Vdb)
     if not bool(Ddb):
-        print('FAILED TO LOAD %s' % args.params_dict['Ddb'], file = sys.stderr)
+        print('[getGermdict] Vdb is empty... FAILED TO LOAD %s' % args.params_dict['Ddb'], file = sys.stderr, flush=True)
     else:
         germ_dict.update(Ddb)
     if not bool(Jdb):
-        print('FAILED TO LOAD %s' % args.params_dict['Jdb'], file = sys.stderr)
+        print('[getGermdict] Vdb is empty... FAILED TO LOAD %s' % args.params_dict['Jdb'], file = sys.stderr, flush=True)
     else:
         germ_dict.update(Jdb)
     return germ_dict
@@ -630,15 +728,30 @@ def collapse_db(records, collapse_type, N_Diff):
     def _collapse_identical_NasDiff(records):
         def __parse_group(group):
             index_dupreads = ','.join(group['SEQUENCE_ID'])
+            # print("index_dupreads",index_dupreads, file = sys.stderr)
+            # print("nested function can print to console?", file=sys.stderr)
             ### 20200916 Lawrence: updated .ix to .loc
             top_series = group.loc[group.index[0]]
             top_series['DUPREAD'] = index_dupreads
             return top_series
+            #return index_dupreads
 
+        #print("keys in records during collapse:", records.keys(), file=sys.stderr)
+        # YES
+        #print("records.shape during collapse:", records.shape, file=sys.stderr)
+        #print("SEQUENCE_INPUT.size in records:", records['SEQUENCE_INPUT'].size, file=sys.stderr)
         grouped = records.groupby('SEQUENCE_INPUT')
+        #print("grouped.ngroups:", grouped.ngroups, file=sys.stderr)
+        #print("grouped.ndim", grouped.ndim, file=sys.stderr)
         colnames = list(records) + ['DUPREAD']
         records_collapse = pd.DataFrame(columns=colnames, index=range(0, len(grouped)))
+        ### __parse_group does it work outside of grouped.apply
         records_collapse = grouped.apply(__parse_group)
+        # records_collapse.size = 0
+        # print("records_collapse after apply:", records_collapse, file=sys.stderr)
+        # EMPTY DATAFREAM
+        #print("records_collapse.size:?", records_collapse.size, file=sys.stderr)
+        #print("records_collapse.keys():", records_collapse.keys(), file=sys.stderr)
 
         return records_collapse
 
@@ -753,7 +866,12 @@ def collapse_db(records, collapse_type, N_Diff):
 
     # Main part in this func
     # Collapse identical reads anyway
+    #print("records.size before collapse?", records.size, file=sys.stderr)
     records = _collapse_identical_NasDiff(records)
+    #print("have all columns after collapse?", records, file=sys.stderr)
+    #print("shape of records after collapse:", records.shape, file=sys.stderr)
+    #print("columns of records after collapse:", records.columns, file=sys.stderr)
+    # [0,0]
     records['INPUT_LEN'] = records["SEQUENCE_INPUT"].map(len)
     records.sort_values('INPUT_LEN', ascending=False, inplace=True)
     # Collapse identical reads with N as no difference
@@ -775,14 +893,27 @@ def collapse_db(records, collapse_type, N_Diff):
 
 def profile_DNAmut(group, nuc_stat, nuc_PDF, nuc_profile, args):
     ''' Prep DNA mutation profile, text and PDF file
+        2021/06 JH: Add in debugging lines to ensure databases are read properly
     '''
-    
+
     def _parse_V_ALLELE_NUC(row):
         return pd.Series([row["SEQUENCE_ID"]] + [s for s in row['V_ALLELE_NUC']])
 
     allele = group["V_ALLELE"].unique()[0]
+    # print(f"allele = {allele}")
     germ_dict = getGermdict(args)
-    allele_seq = germ_dict[allele]
+    if allele == "VH5-4(VH7183.a4.6":
+        allele_seq = germ_dict["VH5-4(VH7183.a4.6)"]
+    else:
+        try:
+            allele_seq = germ_dict[allele]
+        except KeyError:
+            print(f'[profile_DNAmut]: cannot find allele {allele} in Germdict when running nuc_profile for {nuc_profile}')
+            try:
+                print(f'[profile_DNAmut]: current Vdb is {args.params_dict["Vdb"]}', file = sys.stderr, flush=True)
+            except AttributeError:
+                print(f'[profile_DNAmut]: current Vdb is {args.Vdb}', file=sys.stderr, flush=True)
+            raise
     allele_len = len(allele_seq)
     colnames = ['ID'] + [l for l in allele_seq]
     allele_mut = pd.DataFrame(columns=colnames, index=range(0, len(group)))
@@ -843,6 +974,7 @@ def getInferSeq(treefile, group):
         Using germline sequence of V and J to ensure no surprise
     '''
     n = 0
+    print("in getInferSeq, treefile:", treefile, file = sys.stderr)
     with open(treefile) as f:
         for line in f:
             n += 1

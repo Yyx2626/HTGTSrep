@@ -5,7 +5,7 @@ import pandas as pd
 from HTGTSrep.mutprofile import profile_Protein, stat_Protein
 from HTGTSrep.lib import getDNADistMatrix, calcDistances, formClusters, \
                          hier_clust, collapse_db, profile_DNAmut, getInputSeq, \
-                         getInferSeq, profile_DNAmut_clonal, profile_DNAmut_clonal_errbar
+                         getInferSeq, profile_DNAmut_clonal, profile_DNAmut_clonal_errbar, hier_clust_CDR3_PEPTIDE
 from scipy.stats import sem
 
 def define_clones(records, args):
@@ -14,7 +14,6 @@ def define_clones(records, args):
     '''
     if args.cluster_by_gene:
         records['J_GENE'] = records['J_ALLELE'].str.split('*').str[0]
-        ### 09242020 added 'V_ALLELE' to grouped = records.groupby(['V_ALLELE', 'J_GENE', 'JUNCTION_LENGTH'])
         grouped = records.groupby(['V_GENE', 'J_GENE', 'JUNCTION_LENGTH'])
     else:
         ### 09242020 added 'V_ALLELE' to grouped = records.groupby(['V_ALLELE', 'J_GENE', 'JUNCTION_LENGTH'])
@@ -26,7 +25,10 @@ def define_clones(records, args):
             ### 09152020 Lawrence: updated from records.ix to records.loc
             records.loc[group.index, 'clonetmp'] = group['SEQUENCE_ID']
         else:
-            clonelist = hier_clust(group, args.dist)
+            if args.CDR3_AA_Clones:
+                clonelist = hier_clust_CDR3_PEPTIDE(group, args.dist)
+            else:
+                clonelist = hier_clust(group, args.dist)
             ### 09162020 Lawrence: updated from records.set_value(group.index, 'clonetmp', clonelist)
             ### to records.at[group.index, 'clonetmp'] = clonelist
             records.at[group.index, 'clonetmp'] = clonelist
@@ -51,6 +53,7 @@ def write_cloneDb(records, outputfile, args):
     "SEQUENCE_INPUT", "SEQUENCE_VDJ"]
     records_output = records.drop(droplist, axis=1)
     records_output.to_csv(outputfile, sep="\t", index=False)
+    if args.verbose: print(f"write_cloneDb to: {outputfile}", file=sys.stderr)
 
 def AAprofile_clones(group, sample, args):
     ''' Do protein profiling
@@ -186,8 +189,9 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
 
     # Get lineage tree from collapsed records
     ### these two statements help find keyError
-    # print("sample in treeClone =",sample,file=sys.stderr)
-    # print("have allcolumns before collapse?", len(records_tree["SEQUENCE_INPUT"]))
+    if args.verbose: print("sample in treeClone =",sample,file=sys.stderr)
+    ## 0 HERE
+    print("records.size before collapse_db:", records.size, file=sys.stderr)
     records_collapse = collapse_db(records_tree, 'partial', 'F')
     records_collapse['DUPCOUNT'] = 1
     for index, row in records_collapse.iterrows():
@@ -218,7 +222,8 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
     if not args.skipTree:
         os.system('Rscript %s/HTGTSrep/R/TREEPlot.R %s %s/external_software/dnapars %d' % \
               (args.scriptdir, file_collapse, args.scriptdir, args.min_profileread))
-
+        print("lineageTree by 'Rscript %s/HTGTSrep/R/TREEPlot.R %s %s/external_software/dnapars %d'"% \
+              (args.scriptdir, file_collapse, args.scriptdir, args.min_profileread))
     # Generate mutation profile of clones using inferred seq as germline seq
     dirprefix = "%s/%s_clonal" % (args.outdir, sample)
     if sample != 'allsample':
@@ -227,6 +232,7 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
             treefile = "%s/%s_clonal/lineageTree/%d.txt" % (args.outdir, sample, key)
             if os.path.exists(treefile):
                 inferseq = getInferSeq(treefile, group)
+                if args.verbose: print("type of inferseq", type(inferseq), file=sys.stderr)
                 V_ALLELE = group["V_ALLELE"].unique()[0]
                 nuc_stat = "%s/nucl_text_infer/clone%s.%s.%s.%s.%s.stat.txt" % (
                             dirprefix, key, V_ALLELE, sample, args.muttype, args.productivetype)
@@ -272,6 +278,8 @@ def Tree_clones(records, sample, args, sample_errbar=[]):
                 if not os.path.exists(treefile): continue
                 inferseq = getInferSeq(treefile, group)
 
+                if args.verbose: print("type of inferseq", type(inferseq), file=sys.stderr)
+
                 nuc_stat = "%s/nucl_text_infer/clone%s.%s.%s.%s.%s.stat.txt" % (
                             dirprefix, key, V_ALLELE, sample, args.muttype, args.productivetype)
                 nuc_profile = "%s/nucl_text_infer/clone%s.%s.%s.%s.%s.nuc.txt" % (
@@ -300,9 +308,12 @@ def series_analyze_onesample(records, sample, args):
     """
     ### 09162020 Lawrence: added print(...)
     # show the current sample
-    print("current sample:", sample, file=sys.stderr)
+    if args.verbose:
+        print("current sample:", sample, file=sys.stderr)
+        print("records before define_clones() is called:", records.size, file=sys.stderr)
     # Define clones and write IgBlast Db files
     records = define_clones(records, args)
+    if args.verbose: print("records after define_clones() is called:", records.size, file=sys.stderr)
     outputfile = '%s/%s_clonal/%s.db_clone.xls' % (args.outdir, sample, sample)
     write_cloneDb(records, outputfile, args)
 
@@ -313,6 +324,7 @@ def series_analyze_onesample(records, sample, args):
     # Generate AA profile
     for key, group in records.groupby('CLONE'):
         if len(group) >= args.min_profileread:
+            # print(f"sample{sample}, group.columns = {group.columns}", file=sys.stderr)
             DNAprofile_clones(group, sample, args, 'sepCluster')
             AAprofile_clones(group, sample, args)
 
@@ -349,8 +361,13 @@ def clone_stat(records, statfile, sampletype, args):
         mix: clones clustered of all sample reads
         sep: clones clustered of single sample reads
     '''
-    statcols = ['CLONE', 'SAMPLE_NUM', 'READ_NUM', 'SAMPLE_DETAIL', 'SAMPLE_RATIO',
-                'V_ALLELE', 'D_ALLELE', 'J_ALLELE', 'JUNC_LEN', 'JUNC_NUM', 'JUNC_DETAIL']
+    if args.CDR3_AA_Clones:
+        statcols = ['CLONE', 'SAMPLE_NUM', 'READ_NUM', 'SAMPLE_DETAIL', 'SAMPLE_RATIO',
+                    'V_ALLELE', 'D_ALLELE', 'J_ALLELE',  'JUNC_LEN', 'JUNC_NUM',
+                    'JUNC_LEN_AA', 'JUNC_NUM_AA', 'JUNC_DETAIL', 'JUNC_DETAIL_AA']
+    else:
+        statcols = ['CLONE', 'SAMPLE_NUM', 'READ_NUM', 'SAMPLE_DETAIL', 'SAMPLE_RATIO',
+                    'V_ALLELE', 'D_ALLELE', 'J_ALLELE',  'JUNC_LEN', 'JUNC_NUM', 'JUNC_DETAIL']
     statDf = pd.DataFrame(columns=statcols)
     grouped = records.groupby('CLONE')
     for key, group in grouped:
@@ -370,15 +387,30 @@ def clone_stat(records, statfile, sampletype, args):
         V_ALLELE = group["V_ALLELE"].value_counts().keys()[0]
         D_ALLELE = group["D_ALLELE"].value_counts().keys()[0]
         J_ALLELE = group["J_ALLELE"].values[0]
-        JUNC_LEN = len(group['CDR3_SEQ'].values[0])
-        JUNC_NUM = len(group['CDR3_SEQ'].unique())
+        if args.CDR3_AA_Clones:
+            JUNC_LEN = len(group['CDR3_SEQ'].values[0])
+            JUNC_NUM = len(group['CDR3_SEQ'].unique())
+            JUNC_LEN_AA = len(group['CDR3_PEPTIDE'].values[0])
+            JUNC_NUM_AA = len(group['CDR3_PEPTIDE'].unique())
+            junc_count = group['CDR3_SEQ'].value_counts()
+            junc_count_AA = group['CDR3_PEPTIDE'].value_counts()
 
-        junc_count = group['CDR3_SEQ'].value_counts()
-        JUNC_DETAIL = '|'.join(['%s:%d' % (junc, junc_count[junc]) \
+            JUNC_DETAIL = '|'.join(['%s:%d' % (junc, junc_count[junc]) \
+                                for junc in group['CDR3_SEQ'].unique()])
+            JUNC_DETAIL_AA = '|'.join(['%s:%d' % (junc, junc_count_AA[junc]) \
+                                for junc in group['CDR3_PEPTIDE'].unique()])
+            statDf.loc[len(statDf) + 1] = [CLONE, SAMPLE_NUM, READ_NUM, SAMPLE_DETAIL, SAMPLE_RATIO,
+                                           V_ALLELE, D_ALLELE, J_ALLELE, JUNC_LEN, JUNC_NUM,
+                                           JUNC_LEN_AA, JUNC_NUM_AA, JUNC_DETAIL, JUNC_DETAIL_AA]
+        else:
+            JUNC_LEN = len(group['CDR3_SEQ'].values[0])
+            JUNC_NUM = len(group['CDR3_SEQ'].unique())
+            junc_count = group['CDR3_SEQ'].value_counts()
+            JUNC_DETAIL = '|'.join(['%s:%d' % (junc, junc_count[junc]) \
                                 for junc in group['CDR3_SEQ'].unique()])
 
-        statDf.loc[len(statDf)+1] = [CLONE, SAMPLE_NUM, READ_NUM, SAMPLE_DETAIL, SAMPLE_RATIO,
-                                    V_ALLELE, D_ALLELE, J_ALLELE, JUNC_LEN, JUNC_NUM, JUNC_DETAIL]
+            statDf.loc[len(statDf)+1] = [CLONE, SAMPLE_NUM, READ_NUM, SAMPLE_DETAIL, SAMPLE_RATIO,
+                                        V_ALLELE, D_ALLELE, J_ALLELE, JUNC_LEN, JUNC_NUM, JUNC_DETAIL]
 
     if sampletype == 'sep': statDf.drop('SAMPLE_RATIO', inplace=True, axis=1)
     statDf.to_csv(statfile, sep="\t", index=False)
@@ -386,38 +418,38 @@ def clone_stat(records, statfile, sampletype, args):
 def series_analyze_allsample(records, samplelist, args):
     ''' Series analyze of pooled samples
     '''
-    records.CLONE = records.SAMPLE + '.' + records.CLONE.map(str)
-    outputfile = '%s/allsample_clonal/allsample.sep_clone.xls' % (args.outdir)
-    records.to_csv(outputfile, sep="\t", index=False)
+    if not args.collectiveClonesOnly:
+        records.CLONE = records.SAMPLE + '.' + records.CLONE.map(str)
+        outputfile = '%s/allsample_clonal/allsample.sep_clone.xls' % (args.outdir)
+        records.to_csv(outputfile, sep="\t", index=False)
+        # Do diversity/abundance analysis using clones clustered within each sample
+        diversity_analyze(outputfile, args)
+        # Do clonal clustering of all sample reads
+        records.drop('CLONE', inplace=True, axis=1)
+    if not args.onlyParse:
+        records = define_clones(records, args)
+        outputfile = '%s/allsample_clonal/allsample.mix_clone.xls' % (args.outdir)
+        records.to_csv(outputfile, sep="\t", index=False)
 
-    # Do diversity/abundance analysis using clones clustered within each sample
-    diversity_analyze(outputfile, args)
+         # Generate mutation profile for each sample
+        for key, group in records.groupby('CLONE'):
+            sample_errbar = []
+            # key is each clone
+            # group is df
+            for sample, subgroup in group.groupby('SAMPLE'):
+                ### args.min_profileread_sub = 10
+                if len(subgroup) >= args.min_profileread_sub:
+                    sample_errbar.append(sample)
+                    DNAprofile_clones(subgroup, sample, args, 'mixCluster')
+            if len(group) >= args.min_profileread:
+                # Gen all sample profile & with err bar
+                DNAprofile_clones(group, "allsample", args, 'mixCluster')
+                AAprofile_clones(group, "allsample", args)
+                if len(sample_errbar) > 1:
+                    DNAprofile_clones_errbar(group, sample_errbar, args)
 
-    # Do clonal clustering of all sample reads
-    records.drop('CLONE', inplace=True, axis=1)
-    records = define_clones(records, args)
-    outputfile = '%s/allsample_clonal/allsample.mix_clone.xls' % (args.outdir)
-    records.to_csv(outputfile, sep="\t", index=False)
-   
-    # Generate mutation profile for each sample
-    for key, group in records.groupby('CLONE'):
-        sample_errbar = []
-        # key is each clone
-        # group is df
-        for sample, subgroup in group.groupby('SAMPLE'):
-            ### args.min_profileread_sub = 10
-            if len(subgroup) >= args.min_profileread_sub:
-                sample_errbar.append(sample)
-                DNAprofile_clones(subgroup, sample, args, 'mixCluster')
-        if len(group) >= args.min_profileread:
-            # Gen all sample profile & with err bar
-            DNAprofile_clones(group, "allsample", args, 'mixCluster')
-            AAprofile_clones(group, "allsample", args)
-            if len(sample_errbar) > 1:
-                DNAprofile_clones_errbar(group, sample_errbar, args)
-
-    statfile = '%s/allsample_clonal/allsample.mix_clone.stat.xls' % (args.outdir)
-    clone_stat(records, statfile, 'mix', args)
+        statfile = '%s/allsample_clonal/allsample.mix_clone.stat.xls' % (args.outdir)
+        clone_stat(records, statfile, 'mix', args)
     #########CREATE MASTER TLX HERE ################
     masterstatfile = '%s/allsample_clonal/allsample.master.mix_clone.stat.xls' % (args.outdir)
     #tempFile = '%s/%s_clonal/%s.clone_stat_temp.xls' % (args.outdir, sample, sample)#
@@ -428,9 +460,16 @@ def series_analyze_allsample(records, samplelist, args):
     print("samplelist=",samplelist, file = sys.stderr)
 
     ##create master xls
-    scriptLocation = '%s/HTGTSrep/junctionsPerLibs.py' % (args.scriptdir)
-    os.system("python3 {0} {1} {2} > {3}".format(scriptLocation, statfile, listSamples, masterstatfile)) ###junctionsperlibs
-    
+
+    statfile = '%s/allsample_clonal/allsample.mix_clone.stat.xls' % (args.outdir)
+    if not args.CDR3_AA_Clones:
+        scriptLocation = '%s/HTGTSrep/junctionsPerLibs.py' % (args.scriptdir)
+        os.system("python3 {0} {1} {2} > {3}".format(scriptLocation, statfile, listSamples,
+                                                     masterstatfile))  ###junctionsperlibs
+    else:
+        scriptLocation = '%s/HTGTSrep/junctionsPerLibs_CDR3_AA.py' % (args.scriptdir)
+        os.system("python3 {0} {1} {2} > {3}".format(scriptLocation, statfile, listSamples, masterstatfile)) ###junctionsperlibs_CDR3_AA
+    if args.verbose: print("python3 {0} {1} {2} > {3}".format(scriptLocation, statfile, listSamples, masterstatfile), file=sys.stderr)
     ###create lib detail file
     libdetailfile = '%s/allsample_clonal/allsample.lib_detail.xls' % (args.outdir)
     libScript = '%s/HTGTSrep/libConsensus_clonal.py' % (args.scriptdir)
@@ -480,19 +519,28 @@ def clonal_main(args):
         path = sample_path[sample]
         dbpath = path + '/%s.db.xls' % sample
         records = pd.read_csv(dbpath, sep="\t")
-        print("initial records file", dbpath, file=sys.stderr)
+        # added debugging lines that will be printed if --verbose is specified
+        if args.verbose:
+            print(f"records path {dbpath}", file=sys.stderr)
+            print(f"records.shape after being read ={records.shape}", file=sys.stderr)
         # Filter records using V coverage, CDR3 length, whether 'N' in CDR3
         records = records.loc[records['V_COVERAGE'] > args.min_Vcov, ]
+        if args.verbose: print(f"records.shape after V_COVERAGE ={records.shape}", file=sys.stderr)
         records["JUNCTION_LENGTH"] = records.CDR3_SEQ.map(len)
         records = records.loc[records['JUNCTION_LENGTH'] > 1, ]
+        if args.verbose: print(f"records.shape after JUNCTION_LENGTH ={records.shape}", file=sys.stderr)
         records = records.loc[records['SEQUENCE_IMGT'] != '-', ]
+        if args.verbose: print(f"records.shape after SEQUENCE_IMGT ={records.shape}", file=sys.stderr)
 
         records['SAMPLE'] = sample
         records['CDR3_MASK'] = [re.sub('[\.-]', 'N', seq) for seq in records.CDR3_SEQ]
-
+        #records = records.convert_dtypes()
+        #dtypes = records.dtypes
+        #print(f"records={dbpath}, dtypes = {dtypes}", file=sys.stderr)
+        #print(f"records.shape before filtering ={records.shape}", file=sys.stderr)
         if args.skipCDR3withN:
+            records["CDR3_MASK"] = records["CDR3_MASK"].astype("str")
             records = records[~records['CDR3_MASK'].str.contains("N")]
-
         if args.muttype == 'MutOnly':
             records = records.loc[records['V_MUTATION'] > 0, ]
         elif args.muttype == 'noMut':
@@ -501,17 +549,24 @@ def clonal_main(args):
             records = records.loc[records['PRODUCTIVE'] == 'T', ]
         elif args.productivetype == 'NP':
             records = records.loc[records['PRODUCTIVE'] == 'F', ]
+        #print(f"records.shape after filtering ={records.shape}", file=sys.stderr)
+
         # Run series analysis with multiprocessing   result = series_analyze_onesample(records, sample, args)
-     #   print("mid loop: sample is", sample, file=sys.stderr)
-        result = pool.apply_async(series_analyze_onesample, (records, sample, args,))
-     #   print("result.get()",result.get(),file=sys.stderr)
-        results.append(result)
+        if not args.collectiveClonesOnly:
+            result = pool.apply_async(series_analyze_onesample, (records, sample, args,))
+            results.append(result)
+        else:
+            results.append(records)
     pool.close()
     pool.join()
 
     # Analysis in all samples
     #print("frame: results=",results, file = sys.stderr)
     ### frame: results= [<multiprocessing.pool.ApplyResult object at 0x7fe95d9d13d0>, ....,]
-    frames = [result.get() for result in results]
-    records_allsample = pd.concat(frames, ignore_index=True)
+    if not args.collectiveClonesOnly:
+        frames = [result.get() for result in results]
+        records_allsample = pd.concat(frames, ignore_index=True)
+    else:
+        records_allsample = pd.concat(results,ignore_index=True)
+
     series_analyze_allsample(records_allsample, sample_path.keys(), args)

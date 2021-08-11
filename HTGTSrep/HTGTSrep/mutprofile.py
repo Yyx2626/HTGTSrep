@@ -5,7 +5,14 @@ import pandas as pd
 from glob import glob
 from itertools import groupby
 from Bio.Seq import Seq
-from Bio.Alphabet import generic_dna
+try:
+    from Bio.Alphabet import generic_dna
+    Bio_Alphabet = True
+except ImportError:
+    Bio_Alphabet = None
+    # usages of generic_dna, IUPAC are not supported in Biopython 1.78 (September 2020).
+    print(f"The installed BioPython is a new version that has removed the Alphabet module.",file=sys.stderr)
+
 from collections import OrderedDict, Counter
 
 from HTGTSrep.lib import loggingRun, getInputSeq, getCDR, getGermdict, \
@@ -14,7 +21,6 @@ from HTGTSrep.lib import loggingRun, getInputSeq, getCDR, getGermdict, \
 def filter_records(records, args):
     # Only keep joined reads with good V coverage
     records = records.loc[records['V_COVERAGE'] > args.min_Vcov, ]
-
     if not args.includeAllReads:
         records = records.loc[records['V_MUTATION'] > 0, ]
 
@@ -99,7 +105,10 @@ def stat_Protein(protein_file, Vgapseq, allele, reads_db, VDJseq=''):
         triNuc = Vseq_ref[i:i+3]
         if '.' in triNuc or len(triNuc) != 3:
             continue
-        refAA = refAA + Seq(Vseq_ref[i:i+3], generic_dna).translate()[0]
+        if Bio_Alphabet:
+            refAA = refAA + Seq(Vseq_ref[i:i+3], generic_dna).translate()[0]
+        else:
+            refAA = refAA + Seq(Vseq_ref[i:i + 3]).translate()[0]
 
     # Load protein file
     # colnames = [i for i in range(1, len(refAA)+1)]
@@ -145,6 +154,8 @@ def profile_Protein(group, protein_file, protein_PDF, Vgapseq, args):
         readseq = ''
         tripletlist = []
         # Prep triplet array for the seq base on if exists IMGT gaps
+        # 04262021 yuxiang bug added try except
+
         if row['GERMLINE_IMGT_D_MASK'] != '-' and row['SEQUENCE_IMGT'] != '-':
             SEQUENCE_IMGT = row['SEQUENCE_IMGT']
             vlen = int(row['V_SEQ_LENGTH'])
@@ -190,7 +201,10 @@ def profile_Protein(group, protein_file, protein_PDF, Vgapseq, args):
             if '.' in triplet or 'N' in triplet or '-' in triplet:
                 readprotein += '-'
             else:
-                readprotein += Seq(triplet, generic_dna).translate()[0]
+                if Bio_Alphabet:
+                    readprotein += Seq(triplet, generic_dna).translate()[0]
+                else:
+                    readprotein += Seq(triplet).translate()[0]
         return readprotein
 
     allele = group["V_ALLELE"].unique()[0]
@@ -216,7 +230,6 @@ def profile_Protein(group, protein_file, protein_PDF, Vgapseq, args):
     proteinLen = len(protein_df['READPROTEIN'].tolist()[0])
     ### 09222020 from reads_db = pd.DataFrame(columns=[i for i in range(0, proteinLen)], index=range(0, len(protein_df)))
     ### to reads_db = pd.DataFrame(columns=[i for i in range(1, proteinLen+1)], index=range(1, len(protein_df)+1))
-    '''DOES THIS NEED TO BE CHANGED????'''
     reads_db = pd.DataFrame(columns=[i for i in range(0, proteinLen)], index=range(0, len(protein_df)))
     ###+1 after proteinLen NIA CHANGED, range og starts 1 nia changed to 0
     ### 09182020 Lawrence changed index=range(1, proteinLen+1))) to index=range(0, proteinLen)))
@@ -324,7 +337,7 @@ def mutProfile(args):
         # Drop D upstream reads
         if 'D_UPSTREAM_MATCH_D_GENE' in records.columns:
             records = records.loc[records['D_UPSTREAM_MATCH_D_GENE'] == '-', ]
-
+            records["V_MUTATION"] = records["V_MUTATION"].astype("int64")
         # Write V coverage stat file
         Vcov_file = '{0}/mut_profile/{1}.Vcov.xls'.format(sampledir, sample)
         if (args.collapsePartial or args.collapseIdentical):
@@ -341,7 +354,7 @@ def mutProfile(args):
         if (args.collapsePartial or args.collapseIdentical):
             rates_file = '{0}/mut_profile/{1}.mutfreq.collapse.xls'.format(sampledir, sample)
         write_mutstat(records, statpath, rates_file)
-
+        # print(f"records.columns = {records.columns}", file=sys.stderr)
         # DNA & protein profile on V alleles in productive and non-productive seperately
         for key, group in records.groupby('V_ALLELE'):
             run_profile('NP', group, sample, Vgapseq, args)

@@ -2,8 +2,13 @@
 import sys
 import operator
 from Bio.Seq import Seq
-from Bio.Alphabet import generic_dna
-from Bio.Alphabet import IUPAC
+try:
+    from Bio.Alphabet import generic_dna, IUPAC
+    Bio_Alphabet = True
+except ImportError:
+    Bio_Alphabet = None
+    # usages of generic_dna, IUPAC are not supported in Biopython 1.78 (September 2020).
+    print(f"The installed BioPython is a new version that has removed the Alphabet module.",file=sys.stderr)
 ###Read in master.clone.stat.xls
 
 def get_consensus(allCDR):
@@ -25,7 +30,10 @@ def get_consensus(allCDR):
 def translate(seq):
     while len(seq)%3 != 0:
         seq += "N"
-    AA = Seq(seq, generic_dna).translate()
+    if Bio_Alphabet:
+        AA = Seq(seq, generic_dna).translate()
+    else:
+        AA = Seq(seq).translate()
     return AA
 
 def main():

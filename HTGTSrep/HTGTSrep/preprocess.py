@@ -17,41 +17,43 @@ def _sample_demultiplex(args):
     1) Generate barcode file using first <demulti_length> bps of MID+Primer
     2) demultiplex using fastq-multx program
     '''
-    # create barcode file
-    fbar = open('%s/barcodes.txt' % args.outdir, 'w')
-    for sample in args.metadict:
-        primer = args.metadict[sample][1]
-        primerSet = args.metadict[sample][1].strip().split(',')
-        if len(primerSet) == 1:
-            barcode = (args.metadict[sample][0] + \
-                       args.metadict[sample][1])[:args.demulti_length]
-            fbar.write('%s\t%s\n' % (sample, barcode))
-        elif len(primerSet) > 1:
-            for i in range(0, len(primerSet)):
-                barcode = (args.metadict[sample][0] + primerSet[i])[:args.demulti_length]
-                fbar.write('%s_%d\t%s\n' % (sample, i, barcode))
-    fbar.close()
+    if not args.skipDemultiplex:   # 2021-05-19, Adam_Yyx add this skipDemultiplex condition
+        # create barcode file
+        fbar = open('%s/barcodes.txt' % args.outdir, 'w')
+        for sample in args.metadict:
+            primer = args.metadict[sample][1]
+            primerSet = args.metadict[sample][1].strip().split(',')
+            if len(primerSet) == 1:
+                barcode = (args.metadict[sample][0] + \
+                           args.metadict[sample][1])[:args.demulti_length]
+                fbar.write('%s\t%s\n' % (sample, barcode))
+            elif len(primerSet) > 1:
+                for i in range(0, len(primerSet)):
+                    barcode = (args.metadict[sample][0] + primerSet[i])[:args.demulti_length]
+                    fbar.write('%s_%d\t%s\n' % (sample, i, barcode))
+        fbar.close()
 
-    # create directories if not exist
-    for sample in args.metadict:
-        eachdir = '%s/%s' % (args.outdir, sample)
-        if not os.path.exists(eachdir):
-            os.system('mkdir %s' % eachdir)
+        # create directories if not exist
+        for sample in args.metadict:
+            eachdir = '%s/%s' % (args.outdir, sample)
+            if not os.path.exists(eachdir):
+                os.system('mkdir %s' % eachdir)
 
-    # gunzip raw fastq if gzipped
-    if (args.r1).endswith('gz') or (args.r1).endswith('gzip'):
-        os.system('gzip -c -d %s > %s/raw.r1.fq' % (args.r1, args.outdir))
-        os.system('gzip -c -d %s > %s/raw.r2.fq' % (args.r2, args.outdir))
-    else:
-        os.system('cp %s %s %s' % (args.r1, args.r2, args.outdir))
-    # demultiplex
-    try:
-        loggingRun('fastq-multx -m {0} -x -b -d 0 -B {1}/barcodes.txt {1}/raw.r1.fq ' \
-                    '{1}/raw.r2.fq -o {1}/%_R1.fq {1}/%_R2.fq'.format(
-                    args.demulti_mismatch, args.outdir))
-    except:
-        logging.error('Cannot run fastq-multx to demultiplex samples\n')
-        sys.exit(-1)
+        # gunzip raw fastq if gzipped
+        if (args.r1).endswith('gz') or (args.r1).endswith('gzip'):
+            os.system('gzip -c -d %s > %s/raw.r1.fq' % (args.r1, args.outdir))
+            os.system('gzip -c -d %s > %s/raw.r2.fq' % (args.r2, args.outdir))
+        else:
+            os.system('cp %s %s %s' % (args.r1, args.r2, args.outdir))
+        # demultiplex
+        try:
+            # 02/01/2021 JH: added {2} --demulti_distance
+            loggingRun('fastq-multx -m {0} -x -b -d {2} -B {1}/barcodes.txt {1}/raw.r1.fq ' \
+                        '{1}/raw.r2.fq -o {1}/%_R1.fq {1}/%_R2.fq'.format(
+                        args.demulti_mismatch, args.outdir, args.demulti_distance))
+        except:
+            logging.error('Cannot run fastq-multx to demultiplex samples\n')
+            sys.exit(-1)
 
     # clean raw data and move files to diff fold
     for sample in args.metadict:
@@ -70,21 +72,23 @@ def _primer_process(barcode, primer, sample, subsample, args):
     primertrim = reverse_complement((barcode + primer))[:10]
     adapter = args.metadict[sample][2].strip()
     adapter_rc = reverse_complement(adapter).strip()
+    logfile_R1 = '%s/logs/pipeline.preprocess.trimR1.log' % args.outdir
+    logfile_R2 = '%s/logs/pipeline.preprocess.trimR2.log' % args.outdir
     # 1. trim adapter at R2 5' end and seq after primer at R2 3' end
     try:
-        loggingRun('cutadapt --quiet -g %s -a %s -n 2 -m 50 -o %s/%s_R2.trim.fq %s/%s_R2.fq' % (
-                adapter_rc.strip(), primertrim, eachdir, subsample, eachdir, subsample))
+        loggingRun('cutadapt --quiet -g %s -a %s -n 2 -m 50 -o %s/%s_R2.trim.fq %s/%s_R2.fq >> %s' % (
+            adapter_rc.strip(), primertrim, eachdir, subsample, eachdir, subsample, logfile_R2))
     except:
         logging.error('Cannot run cutadapt to trim adapter')
         sys.exit(-1)
 
     # 2. trim barcode at R1 5' end adapter at R1 3' end
     if barcode != '':
-        loggingRun('cutadapt --quiet -g ^%s -a %s -n 2 -m 50 -o %s/%s_R1.trim.fq %s/%s_R1.fq' % (
-                barcode, adapter, eachdir, subsample, eachdir, subsample))
+        loggingRun('cutadapt --quiet -g ^%s -a %s -n 2 -m 50 -o %s/%s_R1.trim.fq %s/%s_R1.fq >> %s' % (
+                barcode, adapter, eachdir, subsample, eachdir, subsample, logfile_R1))
     else:
-        loggingRun('cutadapt --quiet -m 50 -a %s -o %s/%s_R1.trim.fq %s/%s_R1.fq' % (
-                adapter, eachdir, subsample, eachdir, subsample))
+        loggingRun('cutadapt --quiet -m 50 -a %s -o %s/%s_R1.trim.fq %s/%s_R1.fq >> %s' % (
+                adapter, eachdir, subsample, eachdir, subsample, logfile_R1))
 
     # 3. join R1 and R2 fastq files, and convert to fasta files
     loggingRun("awk '{{print $1}}' {0}/{1}_R1.trim.fq > {0}/{1}_R1.clean.fq".format(

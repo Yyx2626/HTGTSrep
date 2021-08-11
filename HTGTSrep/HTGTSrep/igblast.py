@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 import os, re, sys, logging, csv, multiprocessing
-
 import pandas as pd
 from itertools import groupby
+import itertools, functools
+try:
+    from Bio.Alphabet import generic_dna, IUPAC
+    Bio_Alphabet = True
+except ImportError:
+    Bio_Alphabet = None
+    # usages of generic_dna, IUPAC are not supported in Biopython 1.78 (September 2020).
+    print(f"The installed BioPython is a new version that has removed the Alphabet module.",file=sys.stderr)
 from Bio.Seq import Seq
-from Bio.Alphabet import generic_dna
-from Bio.Alphabet import IUPAC
 from collections import OrderedDict
-
 from HTGTSrep.lib import loggingRun, getInputSeq, getCSV, collapse_db
 
 def mutV(ig_dict):
@@ -176,14 +180,20 @@ def gapV(ig_dict, repo_dict):
     """
 
     seq_imgt = '.' * (int(ig_dict['V_GERM_START_VDJ']) - 1) + ig_dict['SEQUENCE_VDJ']
-
+    #print("seq_imgt before gapping in gapV()", seq_imgt, file = sys.stderr)
+    # present before gapping
     # Find gapped germline V segment
     vkey = ig_dict['V_ALLELE']
+    #print("keys in repo_dict:", repo_dict.keys(), file=sys.stderr)
+    #print("vkey of interest:", vkey, file=sys.stderr)
     if vkey in repo_dict:
         vgap = repo_dict[vkey]
+        #print("vgap present?", vgap, file=sys.stderr)
         # Iterate over gaps in the germline segment
         gaps = re.finditer(r'\.', vgap)
+        #print("vgap present?", gaps, file=sys.stderr)
         gapcount = int(ig_dict['V_GERM_START_VDJ']) - 1
+        #print("gapcount present?", gapcount, file=sys.stderr)
         for gap in gaps:
             i = gap.start()
             # Break if gap begins after V region
@@ -193,11 +203,13 @@ def gapV(ig_dict, repo_dict):
             seq_imgt = seq_imgt[:i] + '.' + seq_imgt[i:]
             # Update gap counter
             gapcount += 1
+        #print("seq_imgt after gapping", seq_imgt, file=sys.stderr)
         ig_dict['SEQUENCE_IMGT'] = seq_imgt
         # Update IMGT positioning information for V
         ig_dict['V_GERM_START_IMGT'] = 1
         ig_dict['V_GERM_LENGTH_IMGT'] = ig_dict['V_GERM_LENGTH_VDJ'] + gapcount
 
+    # print("seq_imgt keys() check after gapping in Vgap()", ig_dict.keys(), file=sys.stderr)
     return ig_dict
 
 def readOneIgBlastResult(block):
@@ -282,14 +294,15 @@ def writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, Prim
     # Initialize IgBlast db
     db_handle = open(IgBlast_db, 'wt')
     db_writer = csv.writer(db_handle, delimiter = "\t")
+    # Yyx changed back 2021-06-02, bottleneck is not output
     db_writer.writerow(ordered_fields)
+#    print('\t'.join(ordered_fields), file=db_handle)
     # Get input sequence dictionary
     seq_dict = getInputSeq(seq_file)
-    with open(IgBlast_output) as f:
-        # Iterate over individual results (separated by # IgBlastN)
-        for k1, block in groupby(f, lambda x: re.match('# IGBLASTN', x)):
-            block = list(block)
-            if k1: continue
+    # Yyx changed below on 2021-06-02
+    def parseOneBlock(block):
+#            block = list(block)
+#            if k1: continue
 
             # Initialize db_gen
             db_gen = {}
@@ -300,20 +313,24 @@ def writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, Prim
 
             # Parse db_gen to have ID and input sequence
             db_gen['SEQUENCE_ID'] = query_name
+            # Yyx add 2021-04-15, should check strand, reverse complement if query is minus strand
+            should_reverse_complement = any(('your query represents the minus strand' in x) for x in block)
             # Parse further sub-blocks
             block_list = readOneIgBlastResult(block)
             # Skip read without alignment or V alignment
-            if block_list is None: continue
-            if block_list[0][0] == 'N/A': continue
+            if block_list is None: return
+            if block_list[0][0] == 'N/A': return
             # Penultimate has to be dataframe of FR&CDR position
-            if isinstance(block_list[-2], list): continue
+            if isinstance(block_list[-2], list): return
             # Parse quality information
             db_gen['STRAND'] = block_list[0][-1]
             db_gen['SEQUENCE_INPUT'] = seq_dict[query_name]
             if db_gen['STRAND'] == '-':
-                db_gen['SEQUENCE_INPUT'] = str(Seq(db_gen['SEQUENCE_INPUT'],
+                if Bio_Alphabet:
+                    db_gen['SEQUENCE_INPUT'] = str(Seq(db_gen['SEQUENCE_INPUT'],
                                     IUPAC.ambiguous_dna).reverse_complement())
-
+                else:
+                    db_gen['SEQUENCE_INPUT'] = str(Seq(db_gen['SEQUENCE_INPUT']).reverse_complement())
             if block_list[0][-2] == 'Yes': db_gen['PRODUCTIVE'] = 'T'
             if block_list[0][-2] == 'No': db_gen['PRODUCTIVE'] = 'F'
             if block_list[0][-3] == 'In-frame': db_gen['IN_FRAME'] = 'T'
@@ -335,11 +352,15 @@ def writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, Prim
 
             # Parse junction sequence
             if len(block_list[1]) >= 5:
+            # ALTERNATIVELY FILTER BY CHAIN_TYPE
+            # if db_gen['CHAIN_TYPE'] == 'VH':
                 if block_list[1][0] != 'N/A': db_gen['V_END'] = block_list[1][0]
                 if block_list[1][1] != 'N/A': db_gen['V_D_JUNCTION'] = block_list[1][1]
                 if block_list[1][2] != 'N/A': db_gen['D_REGION'] = block_list[1][2]
                 if block_list[1][3] != 'N/A': db_gen['D_J_JUNCTION'] = block_list[1][3]
                 if block_list[1][4] != 'N/A': db_gen['J_START'] = block_list[1][4]
+            # ALTERNATIVELY FILTER BY CHAIN_TYPE
+            # elif db_gen['CHAIN_TYPE'] == 'VK':
             elif len(block_list[1]) == 3:
                 if block_list[1][0] != 'N/A': db_gen['V_END'] = block_list[1][0]
                 if block_list[1][1] != 'N/A': db_gen['V_J_JUNCTION'] = block_list[1][1]
@@ -348,8 +369,15 @@ def writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, Prim
             # if subset == 'unjoinR2':
             #     inputseq = seq_dict[query_name]
             # else:
-            inputseq = str(Seq(seq_dict[query_name],
-                    IUPAC.ambiguous_dna).reverse_complement())
+
+            if Bio_Alphabet:
+                inputseq = Seq(seq_dict[query_name], IUPAC.ambiguous_dna)
+            else:
+                inputseq = Seq(seq_dict[query_name])
+            # Yyx add 2021-04-15, should check strand, reverse complement if query is minus strand
+            if should_reverse_complement:
+                inputseq = inputseq.reverse_complement()
+            inputseq = str(inputseq)
             # CDR 1 & 2 block is dataframe
             hit_regions = block_list[-2]
             regions = list(hit_regions.loc[:,0])
@@ -361,12 +389,18 @@ def writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, Prim
             for key, row in hit_regions.iterrows():
                 if row[0].startswith('CDR1') and FR1_EXIST == 1:
                     db_gen['CDR1_SEQ'] = inputseq[int(row[1])-1: int(row[2])]
-                    db_gen['CDR1_PEPTIDE'] = str(Seq(db_gen['CDR1_SEQ'],
+                    if Bio_Alphabet:
+                        db_gen['CDR1_PEPTIDE'] = str(Seq(db_gen['CDR1_SEQ'],
                                                 generic_dna).translate())
+                    else:
+                        db_gen['CDR1_PEPTIDE'] = str(Seq(db_gen['CDR1_SEQ']).translate())
                 if row[0].startswith('CDR2') and FR2_EXIST == 1:
                     db_gen['CDR2_SEQ'] = inputseq[int(row[1])-1: int(row[2])]
-                    db_gen['CDR2_PEPTIDE'] = str(Seq(db_gen['CDR2_SEQ'],
+                    if Bio_Alphabet:
+                        db_gen['CDR2_PEPTIDE'] = str(Seq(db_gen['CDR2_SEQ'],
                                                 generic_dna).translate())
+                    else:
+                        db_gen['CDR2_PEPTIDE'] = str(Seq(db_gen['CDR2_SEQ']).translate())
 
             # CDR 1 & 2 block is list
             if isinstance(block_list[2], list) and len(block_list[2]) > 2:
@@ -488,7 +522,12 @@ def writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, Prim
             db_gen['SEQUENCE_VDJ'] = seq_vdj
             # Create IMGT-gapped sequence and infer IMGT junction
             if not db_gen['V_ALLELE'].endswith('_DS'):
+                # print("perform gapV: is db_gen['SEQUENCE_IMGT'] present before gapV?",  db_gen['SEQUENCE_IMGT'], file=sys.stderr)
+                # "-" as expected
                 db_gen = gapV(db_gen, repo_dict)
+                ### initialized upstream: repo_dict = getInputSeq(args.Vgapseq)
+                #print("perform gapV: is db_gen['SEQUENCE_IMGT'] present after gapV()?", db_gen['SEQUENCE_IMGT'], file=sys.stderr)
+                # "-" empty afterwards
                 db_gen = dmask(db_gen, repo_dict)
                 db_gen = mutV(db_gen)
             # Update two unique columns for D upstream
@@ -500,8 +539,31 @@ def writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, Prim
                         db_gen['D_UPSTREAM_STITCH_D_GENE'] = 'T'
                 else:
                     db_gen['D_UPSTREAM_MATCH_D_GENE'] = 'F'
+            # Yyx changed back 2021-06-02, bottleneck is not output
             db_writer.writerow([db_gen[f] for f in ordered_fields])
-        db_handle.close()
+#            print('\t'.join([str(db_gen[f]) for f in ordered_fields]), file=db_handle)
+
+    IGBLASTN_pattern = re.compile('# IGBLASTN')
+    with open(IgBlast_output) as f:
+        # Iterate over individual results (separated by # IgBlastN)
+        # Yyx changed back on 2021-06-02, the bottleneck is not input
+        for k1, block in groupby(f, lambda x: IGBLASTN_pattern.match(x)):
+            if k1: continue
+            parseOneBlock(list(block))
+#        k1 = ''
+#        block = []
+#        for x in f:
+#            if IGBLASTN_pattern.match(x):
+#                if k1 != '':
+#                    parseOneBlock(block)
+#                k1 = x
+#                block = []
+#            else:
+#                block.append(x)
+#        if k1 != '':
+#            parseOneBlock(block)
+
+    db_handle.close()
 
 def run_one_IgBlast(sample, args):
     ''' run IgBlast agaist one sample
@@ -548,6 +610,7 @@ def run_IgBlast(args):
         pool.close()
         pool.join()
     # clean up files if no need to do IgBlast search
+    # will never be run if skipIgBlast
     else:
         for sample in args.metadict:
             if os.path.exists('%s/%s/IgBlast_raw' % (args.outdir, sample)):
@@ -556,7 +619,8 @@ def run_IgBlast(args):
                 os.system('mv {0}/{1}/IgBlast_results/* {0}/{1}/'.format(args.outdir, sample))
             if os.path.exists('%s/%s/reads_fasta/' % (args.outdir, sample)):
                 os.system('mv {0}/{1}/reads_fasta/* {0}/{1}/'.format(args.outdir, sample))
-            os.system('gunzip %s/%s/*.gz' % (args.outdir, sample))
+            # 04262021 JH added -q
+            os.system('gunzip -q %s/%s/*.gz' % (args.outdir, sample))
 
 def parse_one_Record(row, args):
     """
@@ -602,14 +666,15 @@ def parse_one_Record(row, args):
         if args.checkProductive and row['PRODUCTIVE'] == '-':
             tags.append('NO_PRODCTIVE_INFO')
 
-    # Parse J gene
-    if row['J_ALLELE'] == '-':
-        tags.append('J_NO_ALIGNMENT')
-    else:
-        if int(row['J_ALIGNMENT']) < args.J_length:
-            tags.append('J_SHORT_ALIGNMENT')
-        if args.J_gene and args.J_gene not in row['J_ALLELE']:
-            tags.append('J_NOT_MATCH_JGENE')
+    # Parse J gen=-09
+    if not args.skipJAlignmentFilter:
+        if row['J_ALLELE'] == '-':
+            tags.append('J_NO_ALIGNMENT')
+        else:
+            if int(row['J_ALIGNMENT']) < args.J_length:
+                tags.append('J_SHORT_ALIGNMENT')
+            if args.J_gene and args.J_gene not in row['J_ALLELE']:
+                tags.append('J_NOT_MATCH_JGENE')
 
     # Parse R1&R2 V allele
     if 'V_ALLELE_R2' in row:
@@ -687,6 +752,8 @@ def summarize_one_IgBlast(sample, records, args):
         if args.mousestrain in ['B6']:
             annofile = '%s/database/annotation/mouse_%s_B6_anno.txt' % (
                     args.scriptdir, args.VDJdatabase)
+    # with no specific organism and VDJdatabase, /usr/pipelines/HTGTSrep_pipeline/database/annotation/mouse_IGH_anno.txt is the default
+    # /usr/pipelines/HTGTSrep_pipeline/database/annotation/mouse_IGH_anno.txt has both B6 and mm129
     # Summarize one IgBlast output
     gene_count = {}
     for key, group in records.groupby('V_GENE'):
@@ -705,13 +772,17 @@ def summarize_one_IgBlast(sample, records, args):
         V_stat = pd.read_csv(annofile, names=nameslist, sep="\t").fillna(0)
         # Filter out non-mutated reads and drop V_MUTATION col
         for gene in gene_count:
-            gene_isin = V_stat.ix[V_stat["V_GENE"].isin([gene]), ]
+            # update from ix to loc
+            gene_isin = V_stat.loc[V_stat["V_GENE"].isin([gene]), ]
             if len(gene_isin) > 0:
                 index = gene_isin.index[0]
-                V_stat.ix[index, 3:6] = gene_count[gene]
+                # update from ix to iloc
+                V_stat.iloc[index, 3:6] = gene_count[gene]
             else:
                 newrow = [gene, "-", "-"] + gene_count[gene]
-                V_stat.ix[len(V_stat)+1] = newrow
+                # update from ix to iloc
+                V_stat.loc[len(V_stat)+1] = newrow
+                print(newrow, file=sys.stderr)
     else:
         V_stat = pd.DataFrame(columns=nameslist)
         V_stat[["LOCUS","FUNCTIONAL"]] = "-"
@@ -776,9 +847,9 @@ def summarize_OneSample(dirpath, sample, records_pass, args, dedup=''):
 
     # Stat pass, joined reads
     records_join = records_pass.loc[records_pass['JOINED']=='T']
-    if args.D_upstream:
-        records_join.loc[records_join['V_MUTATION']=="-", 'V_MUTATION'] = 0
-        records_join.loc[records_join['J_MUTATION_NOPRIMER']=="-", 'J_MUTATION_NOPRIMER'] = 0
+
+    records_join.loc[records_join['V_MUTATION']=="-", 'V_MUTATION'] = 0
+    records_join.loc[records_join['J_MUTATION_NOPRIMER']=="-", 'J_MUTATION_NOPRIMER'] = 0
     records_join.loc[:,'V_MUTATION'] = records_join.V_MUTATION.astype(int)
     records_join.loc[:,'J_MUTATION_NOPRIMER'] = records_join.J_MUTATION_NOPRIMER.astype(int)
 
@@ -854,29 +925,83 @@ def WriteDbAndStat(records_all, dirpath, sample, args):
     IgBlast_dedup_output = '%s/%s.dedup.xls' % (dirpath, sample)
     records_dedup.to_csv(IgBlast_dedup_output, sep="\t", index=False)
 
-def parse_IgBlast(args):
+## 2021-05-20, Adam_Yyx add this variable and function writeIgBlastDb_for_oneSampleSubset for parallel
+def writeIgBlastDb_for_oneSampleSubset(sample_subset_pair, args, force_output=True):
+    sample, subset = sample_subset_pair
+    dirpath = '%s/%s' % (args.outdir, sample)
+    if args.Vgapseq:
+        repo_dict = getInputSeq(args.Vgapseq)
+
+    IgBlast_output = '%s/%s_%s.IgBlast' % (dirpath, sample, subset)
+    seq_file = '%s/%s_%s.fa' % (dirpath, sample, subset)
+    IgBlast_db = '%s/%s_%s.IgBlast.db' % (dirpath, sample, subset)
+    ## 2021-05-20, Adam_Yyx add writeIgBlastDb_oneSample() for parallel
+    if os.path.exists(IgBlast_output):
+        if force_output or not os.path.exists(IgBlast_db):
+            logging.info('start writeIgBlastDb for %s_%s ...' % (sample, subset))
+            writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, args.metadict[sample][3], args.D_upstream)
+            logging.info('finish writeIgBlastDb for %s_%s' % (sample, subset))
+
+def writeIgBlastDb_for_oneSample(sample, args, force_output=True):
+    for subset in args.readtypes:
+        writeIgBlastDb_for_oneSampleSubset((sample, subset), args, force_output)
+
+def writeIgBlastDb_for_oneSubset(subset, args, force_output=True):
+    for sample in args.metadict:
+        writeIgBlastDb_for_oneSampleSubset((sample, subset), args, force_output)
+
+def parse_IgBlast(args, force_output=True):
     logging.info('Parsing IgBlast......')
 
     # Initialize summary dict, sample: V_stat_dataframe
     global V_stat_dict_kedup, V_stat_dict_dedup
     V_stat_dict_kedup = OrderedDict()
     V_stat_dict_dedup = OrderedDict()
-    if args.Vgapseq: repo_dict = getInputSeq(args.Vgapseq)
+    if args.Vgapseq:
+        repo_dict = getInputSeq(args.Vgapseq)
+        # print("if there is args.Vgapseq, args.Vgapseq is:",args.Vgapseq,file=sys.stderr)
 
     # Parse IgBlast output in each sample
+
+    ## 2021-05-20, Adam_Yyx modified the content of smple loop for parallel
+    if args.parallelParseIgBlast.lower() == 'none':
+        for sample in args.metadict:
+            dirpath = '%s/%s' % (args.outdir, sample)
+
+            # Generate IgBlast db
+            for subset in args.readtypes:
+                IgBlast_output = '%s/%s_%s.IgBlast' % (dirpath, sample, subset)
+                seq_file = '%s/%s_%s.fa' % (dirpath, sample, subset)
+                IgBlast_db = '%s/%s_%s.IgBlast.db' % (dirpath, sample, subset)
+                ## 2021-05-20, Adam_Yyx add writeIgBlastDb_oneSample() for parallel
+                if force_output or not os.path.exists(IgBlast_db):
+                    logging.info('start writeIgBlastDb for %s_%s ...' % (sample, subset))
+                    writeIgBlastDb(IgBlast_output, IgBlast_db, seq_file, repo_dict, subset, args.metadict[sample][3], args.D_upstream)
+                    logging.info('finish writeIgBlastDb for %s_%s' % (sample, subset))
+    elif args.parallelParseIgBlast.lower() == 'sample':
+        sample_list = list(args.metadict)
+        with multiprocessing.Pool(len(sample_list)) as pool:
+            pool.map(functools.partial(writeIgBlastDb_for_oneSample, args=args, force_output=force_output), sample_list)
+        logging.info('multiprocessing writeIgBlastDb are all done.')
+    elif args.parallelParseIgBlast.lower() == 'subset':
+        subset_list = list(args.readtypes)
+        with multiprocessing.Pool(len(subset_list)) as pool:
+            pool.map(functools.partial(writeIgBlastDb_for_oneSubset, args=args, force_output=force_output), subset_list)
+        logging.info('multiprocessing writeIgBlastDb are all done.')
+    elif args.parallelParseIgBlast.lower() == 'sample_subset':
+        sample_subset_pair_list = list(itertools.product(args.metadict, args.readtypes))
+        with multiprocessing.Pool(len(sample_subset_pair_list)) as pool:
+            pool.map(functools.partial(writeIgBlastDb_for_oneSampleSubset, args=args, force_output=force_output), sample_subset_pair_list)
+        logging.info('multiprocessing writeIgBlastDb are all done.')
+
+    ## 2021-05-20, Adam_Yyx separate the content of sample loop for parallel
     for sample in args.metadict:
         dirpath = '%s/%s' % (args.outdir, sample)
 
-        # Generate IgBlast db
-        for subset in args.readtypes:
-            IgBlast_output = '%s/%s_%s.IgBlast' % (dirpath, sample, subset)
-            seq_file = '%s/%s_%s.fa' % (dirpath, sample, subset)
-            IgBlast_db = '%s/%s_%s.IgBlast.db' % (dirpath, sample, subset)
-            writeIgBlastDb(IgBlast_output, IgBlast_db, \
-                            seq_file, repo_dict, subset, args.metadict[sample][3], args.D_upstream)
         # Parse IgBlast db
         IgBlast_db_join = '%s/%s_join.IgBlast.db' % (dirpath, sample)
         if args.input:
+            print('args.input == True, line 907, igblast. This is rarely used. Is this intentional', file = sys.stderr)
             records_all = parse_one_IgBlast(IgBlast_db_join, args)
         else:
             records_join = parse_one_IgBlast(IgBlast_db_join, args)

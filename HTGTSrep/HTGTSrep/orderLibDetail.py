@@ -14,7 +14,9 @@ def main():
     loutput = "\t".join(labels)
     print(loutput)
     for line in masterFile:
-        items = line[:-1].split("\t")
+        # updated to .replace so that the last character of the last line will not be accidentally deleted JH 06092021
+        # items = line[:-1].split("\t")
+        items = line.replace("\n", "").split("\t")
         lib_detail = items[lidx].split("|")
         sample_detail= items[sidx].split("|")
         
@@ -43,12 +45,6 @@ def main():
 
         outputString = "\t".join(items)
         print(outputString)
-
-
-
-
-
-
 
 
 main()
