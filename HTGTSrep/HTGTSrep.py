@@ -23,7 +23,7 @@ def main():
         reads_process(args)
 
     if args.subcmd == 'run':
-        if not args.skipDemultiplex and not args.skipIgBlast:
+        if not args.skipPreprocess and not args.skipIgBlast:
             reads_process(args)
         if not args.skipIgBlast:
             run_IgBlast(args)
