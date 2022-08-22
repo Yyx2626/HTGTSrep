@@ -117,8 +117,10 @@ subcommands:
     
 ```
 usage: HTGTSrep.py run [-h] [-r1 R1] [-r2 R2] [-i INPUT] -m METAFILE -o OUTDIR
-                       [--keepunmatch] [--demulti_length DEMULTI_LENGTH]
+                       [--skipDemultiplex] [--keepunmatch]
+                       [--demulti_length DEMULTI_LENGTH]
                        [--demulti_mismatch DEMULTI_MISMATCH]
+                       [--demulti_distance DEMULTI_DISTANCE]
                        [--overlap OVERLAP] [--diffpercent DIFFPERCENT]
                        [--qscore QSCORE] [--qscore_cov QSCORE_COV]
                        [--fastq_quality_trimmer FASTQ_QUALITY_TRIMMER]
@@ -131,9 +133,11 @@ usage: HTGTSrep.py run [-h] [-r1 R1] [-r2 R2] [-i INPUT] -m METAFILE -o OUTDIR
                        [--V_score V_SCORE] [--V_identity V_IDENTITY]
                        [--V_coverage V_COVERAGE] [--V_length V_LENGTH]
                        [--J_gene J_GENE] [--J_length J_LENGTH]
-                       [--checkProductive] [--skipDedup] [--skipIgBlast]
-                       [--skipUnjoined] [--skipDemultiplex] [--D_upstream]
-                       [--D_upstream_length D_UPSTREAM_LENGTH]
+                       [--skipJAlignmentFilter] [--checkProductive]
+                       [--skipPreprocess] [--skipIgBlast]
+                       [--parallelParseIgBlast PARALLELPARSEIGBLAST]
+                       [--force_output] [--skipUnjoined] [--skipDedup]
+                       [--D_upstream] [--D_upstream_length D_UPSTREAM_LENGTH]
                        [--D_upstream_stitch_length D_UPSTREAM_STITCH_LENGTH]
                        [--dedup_by_col] [--nproc NPROC]
 
@@ -147,11 +151,15 @@ optional arguments:
                         mutually exclusive -r1 and -r2 options
   -m METAFILE           Metadata file
   -o OUTDIR             Output directory
+  --skipDemultiplex     Specifiy to skip Demultiplex and all upstream steps
   --keepunmatch         Keep unmatched reads from demultiplexing
   --demulti_length DEMULTI_LENGTH
                         Use N (12) bp of barcode+primer to demultiplex
   --demulti_mismatch DEMULTI_MISMATCH
                         N-maximum mismatch (0) to demultiplex
+  --demulti_distance DEMULTI_DISTANCE
+                        Require a minimum distance of N between the best and
+                        next best (fastq-multx -d N)
   --overlap OVERLAP     N-minimum overlap to join paired reads (10)
   --diffpercent DIFFPERCENT
                         N-percent maximum difference to join paired reads (8)
@@ -185,7 +193,8 @@ optional arguments:
                         Specify V gene annotation file which has three
                         columns: V gene name, coordinates and function.
   --Vgapseq VGAPSEQ     Specify V IMGT-gapped sequences file.
-  --V_score V_SCORE     Minimum IgBlast score of V gene (150)
+  --V_score V_SCORE     Minimum IgBlast score of V gene (150). This is termed
+                        'bit score' in IgBlast output, and is a way to compare
   --V_identity V_IDENTITY
                         Minimum V identity ratio (0.9)
   --V_coverage V_COVERAGE
@@ -193,11 +202,18 @@ optional arguments:
   --V_length V_LENGTH   Minimum aligned length of V gene (100)
   --J_gene J_GENE       Specify J gene for alignment. eg: IGHJ4
   --J_length J_LENGTH   Minimum alignment length of J gene (34).
+  --skipJAlignmentFilter
+                        Reads that do not have J alignment information will
+                        not be filtered out
   --checkProductive     Include only records with productive information
-  --skipDedup           Specify to skip generate duplicated-removed output
+  --skipPreprocess      Specifiy to skip preprocess
   --skipIgBlast         Specify to skip IgBlast and all upstream steps
+  --parallelParseIgBlast PARALLELPARSEIGBLAST
+                        Specify the level of parallelization for parse IgBlast
+                        (None|Sample|Subset|Sample_Subset|Skip)
+  --force_output        Should I overwrite existing db files? (False|True)
   --skipUnjoined        Specify to skip unjoined reads in parsing igblast db
-  --skipDemultiplex     Specifiy to skip Demultiplex and all upstream steps
+  --skipDedup           Specify to skip generate duplicated-removed output
   --D_upstream          Specify to consider D upstream regions in the
                         analysis. The D upstream sequences should be added in
                         the V database and named as 'D gene' plus '_DS'.
