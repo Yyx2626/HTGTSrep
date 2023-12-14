@@ -27,3 +27,10 @@ Some scripts for stratification and hierarchical Bayesian model for somatic hype
 
 Author: Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
 
+
+## [misc](https://github.com/Yyx2626/HTGTSrep/tree/master/misc)
+
+Some scripts for diversity rarefaction, Venn diagram, and sequence logo
+
+Author: Adam Yongxin Ye @ Boston Children's Hospital / Harvard Medical School
+
