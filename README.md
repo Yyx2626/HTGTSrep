@@ -2,9 +2,9 @@
 
 The computational pipeline and some relevant tools of LAM-HTGTS-Rep-SHM-Seq
 
-Citation: (in preparation)
-
 License: MIT license
+
+Citation: Chen H, Zhang Y, Ye AY, Du Z, Xu M, Lee CS, Hwang JK, Kyritsis N, Ba Z, Neuberg D, Littman DR, Alt FW. BCR selection and affinity maturation in Peyer's patch germinal centres. Nature. 2020 Jun;582(7812):421-425. doi: 10.1038/s41586-020-2262-4. Epub 2020 May 6. PMID: 32499646; PMCID: PMC7478071.
 
 
 ## [HTGTSrep](https://github.com/Yyx2626/HTGTSrep/tree/master/HTGTSrep)
